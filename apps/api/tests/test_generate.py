@@ -179,3 +179,17 @@ def test_clean_plate_preserves_flat_panel_under_text(monkeypatch):
     assert ok and plate.getpixel((100,65))==(255,255,255)
     assert plate.getpixel((30,60))==(255,255,255)  # feathered edge must not leak model red
     assert plate.getpixel((10,10))==original.getpixel((10,10))
+
+
+def test_clean_plate_preserves_nearly_flat_compressed_button(monkeypatch):
+    import io
+    from app.decompose import pipeline
+    original=Image.new('RGB',(400,200))
+    for y in range(200):
+        for x in range(400): original.putpixel((x,y),(4,180+x%10,230+y%10))
+    ImageDraw.Draw(original).rectangle((65,60,200,72),fill='#000044')
+    bad=io.BytesIO(); Image.new('RGB',(400,208),'red').save(bad,'PNG')
+    monkeypatch.setattr(pipeline.images,'edit',lambda *a,**k:bad.getvalue())
+    plate,ok=pipeline.clean_plate(original,[(40,45,300,90)])
+    r,g,b=plate.getpixel((100,65))
+    assert ok and r<20 and g>170 and b>220

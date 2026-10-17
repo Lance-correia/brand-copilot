@@ -77,8 +77,9 @@ def clean_plate(original, holes):
         count, dominant = max(colors,default=(0,(255,255,255)))
         # Text on a flat card/button needs its original surface, not the photographic scene
         # behind that card. Preserve this deterministic fill when inpainting changes the surface.
-        uniform = count >= 4096*.45
-        draw.rectangle(box, fill=dominant if uniform else ring_color(work, box))
+        fill = dominant if count >= 4096*.45 else ring_color(work,box)
+        uniform = count >= 4096*.45 or solid(patch,fill,share=.6)
+        draw.rectangle(box, fill=fill)
         if uniform: flat_draw.rectangle(box,fill=255)
         mdraw.rectangle(box, fill=(0, 0, 0, 0))
     edited, ok = work, True

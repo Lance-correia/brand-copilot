@@ -1,3 +1,13 @@
+# User-workspace split recovery — 2026-10-17
+
+The user's confirmed XERO kit had an empty font list. `nearest_font()` called `min()` on it, so unrelated references failed with the same error. Fontless extraction and legacy-kit loading now install a bundled, explicitly disclosed DM Sans fallback without replacing the uploaded logos, palette or confirmation. Supplying a real brand font remains necessary for accurate typography.
+
+Failed splits stop with an actionable message instead of spending the remaining tool turns repeating the same call. Split-only requests publish an editable Reference card. Short headlines are no longer mistaken for raster logos through perceptual matching. Optional native macOS OCR recovers omitted headline lines and anchors text to its original geometry; other platforms retain Flash vision as the fallback. Flat panels/button fills and their feathered edges are protected from image-model inpainting artifacts.
+
+Verified the user's existing saved reference through the real `/decompose` route in **30.192 s**, retaining both headline lines, CTA, terms and a library logo. Updated its existing Reference card in the saved thread; no re-upload was needed. A final deterministic cleanup also protects compressed, nearly flat button fills. Reconstruction still depends on source quality, model analysis and the available brand font; text-fit and logo-margin lint findings remain on the recovered reference. It is not a pixel-perfect reproduction.
+
+Regression checks: **50 passed, 2 optional live checks skipped** (1.79 s), `npm run typecheck` passed, and `git diff --check` passed. Coverage includes empty-font extraction/repair, one-attempt split failure, split-only publication, short-headline/logo separation, missing-headline OCR recovery, body-font selection and flat-fill edge protection. The earlier complete Studio browser acceptance below was not rerun for this targeted fix; the user's actual saved reference was checked separately with real models and headless Chromium. User subsequently requested a fresh start: runtime brands, assets, designs, threads and their local diagnostic artifacts are cleared after committing this working version. OCR executable caches are retained.
+
 # Chat-first Studio validation — 2026-10-17
 
 Implemented on `main`, committed in working steps, without pushing. The live frontend is at `http://127.0.0.1:5173`, proxying the real-mode API at `127.0.0.1:8000`. Opened the completed Studio conversation in the user's default browser. A separate Docker preview occupies localhost/IPv6 port 5173; the explicit IPv4 URL reaches this checkout.
