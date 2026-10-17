@@ -1,0 +1,69 @@
+{
+  "id": "story-card",
+  "name": "Story, full bleed with copy card",
+  "aspect": "9:16",
+  "width": 1080,
+  "height": 1920,
+  "slots": [
+    {
+      "role": "hero",
+      "kind": "image",
+      "box": [
+        0,
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "role": "decoration",
+      "kind": "shape",
+      "box": [
+        0.06,
+        0.6,
+        0.94,
+        0.93
+      ]
+    },
+    {
+      "role": "headline",
+      "kind": "text",
+      "box": [
+        0.12,
+        0.63,
+        0.88,
+        0.75
+      ]
+    },
+    {
+      "role": "subhead",
+      "kind": "text",
+      "box": [
+        0.12,
+        0.76,
+        0.88,
+        0.81
+      ]
+    },
+    {
+      "role": "cta",
+      "kind": "text",
+      "box": [
+        0.12,
+        0.84,
+        0.5,
+        0.89
+      ]
+    },
+    {
+      "role": "logo",
+      "kind": "image",
+      "box": [
+        0.62,
+        0.85,
+        0.88,
+        0.88
+      ]
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 from uuid import uuid4
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 from app.schema import Asset, Design, DesignSpec, EditOp, Job
 from app.core import db, storage
 from app.core.config import use_stubs
 from app.core.fixtures import read_fixture, variant_designs
 from app.core.validation import validate_contract
+from app.generate import common, variants as variant_job
 
 router = APIRouter(prefix='/api')
 
@@ -41,29 +42,56 @@ def owned_asset(ws, asset_id):
 
 @router.post('/workspaces/{ws}/samples', response_model=SampleResult)
 def upload_sample(ws: str, file: UploadFile = File(...)):
-    stub_only()
-    asset = storage.save_asset(ws, file.file.read(), file.filename, 'sample', 'upload')
-    return SampleResult(asset=asset, spec=DesignSpec.model_validate(read_fixture('samples/spec.json')))
+    data = file.file.read()
+    if use_stubs():
+        asset = storage.save_asset(ws, data, file.filename, 'sample', 'upload')
+        return SampleResult(asset=asset, spec=DesignSpec.model_validate(read_fixture('samples/spec.json')))
+    db.get('Workspace', ws)
+    try:
+        spec = variant_job.analyze_sample(data, file.filename)
+    except Exception as exc:
+        raise HTTPException(502, f'Sample analysis failed: {type(exc).__name__}')
+    asset = storage.save_asset(ws, data, file.filename, 'sample', 'upload', {'spec':spec})
+    return SampleResult(asset=asset, spec=DesignSpec.model_validate(spec))
 
-def start_job(ws, body, count):
-    stub_only()
+def sample_for(ws, body):
     sample = owned_asset(ws, body.sampleAssetId)
     if sample.kind != 'sample':
         raise HTTPException(422, 'A sample asset is required')
+    storage.get_brand_kit(ws)  # 404 early when there is no kit
+    return sample
+
+def start_job(ws, body, count):
+    stub_only()
+    sample_for(ws, body)
     job_id = 'job_' + uuid4().hex
     db.put('JobState', job_id, ws, {'workspaceId':ws, 'designs':variant_designs(ws, count), 'polls':0})
     return JobResult(jobId=job_id)
 
 @router.post('/workspaces/{ws}/decompose', response_model=JobResult)
-def decompose(ws: str, body: SampleRequest):
-    return start_job(ws, body, 1)
+def decompose(ws: str, body: SampleRequest, tasks: BackgroundTasks):
+    if use_stubs():
+        return start_job(ws, body, 1)
+    from app.generate.decompose import run_decompose
+    sample = sample_for(ws, body)
+    job_id = common.new_job()
+    tasks.add_task(common.run_job, job_id, run_decompose, ws, sample)
+    return JobResult(jobId=job_id)
 
 @router.post('/workspaces/{ws}/variants', response_model=JobResult)
-def variants(ws: str, body: SampleRequest):
-    return start_job(ws, body, 4)
+def variants(ws: str, body: SampleRequest, tasks: BackgroundTasks):
+    if use_stubs():
+        return start_job(ws, body, 4)
+    sample = sample_for(ws, body)
+    job_id = common.new_job()
+    tasks.add_task(common.run_job, job_id, variant_job.run_variants, ws, sample, body.brief)
+    return JobResult(jobId=job_id)
 
 @router.get('/jobs/{jobId}', response_model=Job, response_model_exclude_unset=True)
 def poll_job(jobId: str):
+    if jobId in common.JOBS:
+        with common.LOCK:
+            return Job.model_validate(validate_contract('Job', dict(common.JOBS[jobId], designs=list(common.JOBS[jobId]['designs']))))
     state = db.get('JobState', jobId)
     state['polls'] = min(state['polls'] + 1, len(state['designs']))
     designs = state['designs'][:state['polls']]
@@ -76,16 +104,31 @@ def poll_job(jobId: str):
 @router.post('/workspaces/{ws}/images/edit', response_model=Asset)
 def edit_image(ws: str, body: EditRequest):
     asset = owned_asset(ws, body.assetId)
+    if asset.source == 'brand_asset':
+        raise HTTPException(403, 'Brand assets are locked')
     if asset.source != 'generated':
         raise HTTPException(403, 'Only generated images can be edited with AI')
-    stub_only()
-    return storage.save_asset(ws, storage.asset_path(asset.id).read_bytes(), 'edited.png', 'image', 'generated')
+    if use_stubs():
+        return storage.save_asset(ws, storage.asset_path(asset.id).read_bytes(), 'edited.png', 'image', 'generated')
+    from app.generate.chat import edit_generated
+    try:
+        return edit_generated(ws, asset, body.instruction)
+    except PermissionError:
+        raise HTTPException(403, 'Brand assets are locked')
+    except Exception as exc:
+        raise HTTPException(502, f'Image edit failed: {type(exc).__name__}')
 
 @router.post('/workspaces/{ws}/chat', response_model=ChatResult, response_model_exclude_unset=True)
 def chat(ws: str, body: ChatRequest):
-    stub_only()
     db.get('Workspace', ws)
     if body.design.workspaceId != ws:
         raise HTTPException(422, 'Workspace id mismatch')
-    validate_contract('Design', body.design)
+    design = validate_contract('Design', body.design)
+    if not use_stubs():
+        from app.generate.chat import run_chat
+        try:
+            reply, ops = run_chat(ws, design, body.selection, body.message)
+        except Exception as exc:
+            raise HTTPException(502, f'Copilot failed: {type(exc).__name__}')
+        return ChatResult(reply=reply, ops=ops)
     return ChatResult(reply='Stub copilot: select a layer to begin. Direct edits use the canvas controls.', ops=[])
