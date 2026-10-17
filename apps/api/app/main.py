@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import use_stubs
 from app.core.fixtures import seed_workspace
-from app.routers import core, generate
+from app.routers import core, generate, studio
 
 @asynccontextmanager
 async def lifespan(app):
@@ -20,6 +20,7 @@ app = FastAPI(title='Brand Copilot', lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:5173'], allow_methods=['*'], allow_headers=['*'])
 app.include_router(core.router)
 app.include_router(generate.router)
+app.include_router(studio.router)
 
 @app.exception_handler(StarletteHTTPException)
 async def http_error(request: Request, exc: StarletteHTTPException):

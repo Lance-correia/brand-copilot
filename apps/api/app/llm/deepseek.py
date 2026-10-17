@@ -7,16 +7,7 @@ from pathlib import Path
 from openai import OpenAI
 from app.core import config  # Loads the repo-root .env before reading model settings.
 
-def chat(model, messages, tools=None, json_schema=None, images=None):
-    deployment = str(model or '').strip()
-    role = next((role for role in ('PRO', 'FLASH')
-                 if deployment and deployment == os.getenv(f'DEEPSEEK_{role}_MODEL', '').strip()), None)
-    endpoint_name = f'DEEPSEEK_{role}_ENDPOINT' if role else 'AZURE_DEEPSEEK_ENDPOINT'
-    key_name = f'DEEPSEEK_{role}_API_KEY' if role else 'AZURE_DEEPSEEK_API_KEY'
-    endpoint = os.getenv(endpoint_name, '').strip() or os.getenv('AZURE_DEEPSEEK_ENDPOINT', '').strip()
-    key = os.getenv(key_name, '').strip() or os.getenv('AZURE_DEEPSEEK_API_KEY', '').strip()
-    if not endpoint or not key or not model:
-        raise RuntimeError(f'Set {endpoint_name}, {key_name} and the deployment name in .env')
+def image_messages(messages, images=None):
     payload = copy.deepcopy(messages)
     if images:
         content = []
@@ -32,6 +23,19 @@ def chat(model, messages, tools=None, json_schema=None, images=None):
                 url = f'data:{mime};base64,' + base64.b64encode(path.read_bytes()).decode()
             content.append({'type':'image_url', 'image_url':{'url':url}})
         payload.append({'role':'user','content':content})
+    return payload
+
+def chat(model, messages, tools=None, json_schema=None, images=None):
+    deployment = str(model or '').strip()
+    role = next((role for role in ('PRO', 'FLASH')
+                 if deployment and deployment == os.getenv(f'DEEPSEEK_{role}_MODEL', '').strip()), None)
+    endpoint_name = f'DEEPSEEK_{role}_ENDPOINT' if role else 'AZURE_DEEPSEEK_ENDPOINT'
+    key_name = f'DEEPSEEK_{role}_API_KEY' if role else 'AZURE_DEEPSEEK_API_KEY'
+    endpoint = os.getenv(endpoint_name, '').strip() or os.getenv('AZURE_DEEPSEEK_ENDPOINT', '').strip()
+    key = os.getenv(key_name, '').strip() or os.getenv('AZURE_DEEPSEEK_API_KEY', '').strip()
+    if not endpoint or not key or not model:
+        raise RuntimeError(f'Set {endpoint_name}, {key_name} and the deployment name in .env')
+    payload = image_messages(messages, images)
     options = {}
     if tools:
         options['tools'] = tools

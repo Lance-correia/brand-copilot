@@ -51,17 +51,17 @@ def plan_schema(template_ids, tokens):
              colors=s(background=token, accent=token, text=token))
     return s(plans={'type':'array', 'items':plan})
 
-def plan(kit, catalogue, spec, templates, brief):
+def plan(kit, catalogue, spec, templates, brief, source_design=None):
     tokens = [col.token for col in kit.colors]
     context = {
         'brandKit':{'colors':[col.model_dump() for col in kit.colors], 'fonts':[f.token for f in kit.fonts],
                     'voice':kit.voice, 'imageryStyle':kit.imageryStyle},
-        'assets':catalogue, 'designSpec':spec, 'brief':brief or '',
+        'assets':catalogue, 'designSpec':spec, 'brief':brief or '', 'sourceDesign':source_design,
         'templates':[{'id':t['id'], 'name':t['name'], 'aspect':t['aspect'],
                       'slots':[f"{s['role']}:{s['kind']}" for s in t['slots']]} for t in templates]}
     prompt = (
         'You are the art director for this brand. Plan exactly 4 on-brand design variants inspired by the sample design spec '
-        'and the brief.\n'
+        'and the brief. Preserve the source design message and key layout ideas when sourceDesign is provided.\n'
         '- Use 4 different templateIds when possible; if you repeat a template, its angle must be clearly different.\n'
         '- angle: one short phrase naming the creative idea.\n'
         "- copy: headline (max 6 words), subhead (max 12 words), cta (max 3 words), all in the brand voice.\n"
@@ -166,19 +166,31 @@ def generate_image(ws, kit, layer, prompt):
     data = deepseek.retry(images.generate, f'{kit.imageryStyle}. {prompt}', w, h)
     return storage.save_asset(ws, data, f'{c.slug(prompt)}.png', 'image', 'generated', {'prompt':prompt})
 
-def run_variants(job_id, ws, sample, brief):
+def run_variants(job_id, ws, sample, brief, source_design=None, studio=False):
     kit = storage.get_brand_kit(ws)
     c.update_job(job_id, progress='Reading sample')
-    spec = sample_spec(sample)
+    spec = sample_spec(sample) if sample else {
+        'aspect':f"{source_design['width']}:{source_design['height']}",
+        'regions':[{'role':l['role'],'box':[l['x']/source_design['width'],l['y']/source_design['height'],
+                  (l['x']+l['w'])/source_design['width'],(l['y']+l['h'])/source_design['height']]} for l in source_design['layers']],
+        'hierarchy':[l['role'] for l in source_design['layers']], 'mood':'', 'imageryStyle':kit.imageryStyle, 'observedColors':[]}
+
     catalogue = [{'id':a.id, 'kind':a.kind, 'caption':a.caption, 'tags':a.tags}
                  for a in storage.list_assets(ws, 'image')]
     templates = {t['id']:t for t in c.templates()}
     c.update_job(job_id, progress='Planning')
-    plans = deepseek.retry(plan, kit, catalogue, spec, list(templates.values()), brief)
+    plans = deepseek.retry(plan, kit, catalogue, spec, list(templates.values()), brief, **({'source_design':source_design} if source_design else {}))
     valid_ids = {a['id'] for a in catalogue}
     builds = []
     for i, p in enumerate(plans):
         p['assetPicks'] = [a for a in p['assetPicks'] if a['assetId'] in valid_ids]
+        # Give the first Studio option an editable generated photo. Other options can use library imagery.
+        if studio and i == 0:
+            photo_roles = [slot['role'] for slot in templates[p['templateId']]['slots'] if slot['kind']=='image' and slot['role']!='logo']
+            for role in photo_roles:
+                p['assetPicks'] = [a for a in p['assetPicks'] if a['role'] != role]
+                if not any(a['role']==role for a in p['imagePrompts']):
+                    p['imagePrompts'].append({'role':role,'prompt':f'{kit.imageryStyle}. A scene supporting: {p["angle"]}'})
         builds.append(build(templates[p['templateId']], p, kit, ws, f"Variant {chr(65 + i)}: {p['angle']}"[:80]))
     total = sum(len(pending) for _, pending in builds)
     done, failed = [0], [0]
@@ -199,7 +211,7 @@ def run_variants(job_id, ws, sample, brief):
     progress()
     with ThreadPoolExecutor(max_workers=max(1, total)) as pool:
         futures = [[(layer, pool.submit(one, layer, prompt)) for layer, prompt in pending] for _, pending in builds]
-        for (design, _), (p, jobs) in zip(builds, zip(plans, futures)):
+        for option_index, ((design, _), (p, jobs)) in enumerate(zip(builds, zip(plans, futures))):
             for layer, future in jobs:
                 asset = future.result()
                 if asset:
@@ -210,5 +222,6 @@ def run_variants(job_id, ws, sample, brief):
                     layer.update(type='shape', shape='rect', fillToken=p['colors']['accent'], radius=0)
             c.update_job(job_id, progress=f'Checking brand ({design["name"][:9]})')
             design, _ = c.lint_fix(finish(design, kit, p['colors']['text']), kit)
+            if studio: design.update(label=f'Option {chr(65+option_index)}',version=1)
             c.add_design(job_id, ws, design)
     c.update_job(job_id, progress='Done' + (f' ({failed[0]} image(s) failed, placeholders used)' if failed[0] else ''))

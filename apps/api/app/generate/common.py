@@ -133,6 +133,7 @@ def apply_ops(design, ops):
     index = lambda lid: next(i for i, l in enumerate(layers) if l['id'] == lid)
     for op in ops:
         op = op if isinstance(op, dict) else op.model_dump(mode='json', exclude_unset=True)
+        validate_contract('EditOp', op)
         kind = op['op']
         if kind == 'add_layer':
             layers.insert(op.get('index', len(layers)), op['layer'])
