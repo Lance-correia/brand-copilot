@@ -3,12 +3,14 @@
 import io
 import json
 import os
+import re
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'apps/api'))
 from PIL import Image
 from jsonschema import validate
+from openai import APIStatusError, APIConnectionError
 from app.llm.deepseek import chat
 from app.llm import images
 
@@ -22,8 +24,17 @@ def check(name, fn):
         print(f'PASS {name}', flush=True)
         checks.append(True)
     except Exception as exc:
-        # Key/endpoint validation is explicit; provider exceptions may contain user input.
-        message = str(exc) if isinstance(exc, (RuntimeError, AssertionError)) else type(exc).__name__
+        if isinstance(exc, APIStatusError):
+            message = f'HTTP {exc.status_code}: {exc.message}'
+        elif isinstance(exc, APIConnectionError):
+            message = f'{type(exc).__name__}: could not connect to the configured provider'
+        else:
+            message = str(exc) if isinstance(exc, (RuntimeError, AssertionError)) else type(exc).__name__
+        for key, value in os.environ.items():
+            if value and (key.endswith('_API_KEY') or key.endswith('_ENDPOINT')):
+                message = message.replace(value, '[redacted]')
+        message = re.sub(r'https?://[^\s\"\'<>]+', '[provider URL]', message)
+        message = message[:600]
         print(f'FAIL {name}: {message}', flush=True)
         checks.append(False)
 

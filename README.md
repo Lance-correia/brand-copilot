@@ -9,3 +9,5 @@ Fixture assets are fictional. Eight brand images, two samples and four generated
 The scaffold only applies `update_layer` ops. Other operations throw explicitly until Prompt 2 implements them. Thumbnail and font-loading helpers, screens and copilot components are placeholders. No feature logic or styling is included.
 
 Validation and model-smoke results: [scripts/SMOKE_RESULTS.md](scripts/SMOKE_RESULTS.md). If another service occupies IPv4 port 8000, `uvicorn app.main:app --host ::1 --port 8000` works with the default localhost proxy and smoke URL.
+
+DeepSeek deployments can use separate credentials: set `DEEPSEEK_PRO_ENDPOINT`, `DEEPSEEK_PRO_API_KEY`, `DEEPSEEK_PRO_MODEL` and the corresponding `DEEPSEEK_FLASH_*` variables. The chat helper selects credentials using the configured model deployment name. Legacy `AZURE_DEEPSEEK_ENDPOINT` / `AZURE_DEEPSEEK_API_KEY` remain shared fallbacks. Set each endpoint to its OpenAI-compatible base URL.

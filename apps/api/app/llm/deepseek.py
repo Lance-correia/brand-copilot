@@ -8,10 +8,15 @@ from openai import OpenAI
 from app.core import config  # Loads the repo-root .env before reading model settings.
 
 def chat(model, messages, tools=None, json_schema=None, images=None):
-    endpoint = os.getenv('AZURE_DEEPSEEK_ENDPOINT', '').strip()
-    key = os.getenv('AZURE_DEEPSEEK_API_KEY', '').strip()
+    deployment = str(model or '').strip()
+    role = next((role for role in ('PRO', 'FLASH')
+                 if deployment and deployment == os.getenv(f'DEEPSEEK_{role}_MODEL', '').strip()), None)
+    endpoint_name = f'DEEPSEEK_{role}_ENDPOINT' if role else 'AZURE_DEEPSEEK_ENDPOINT'
+    key_name = f'DEEPSEEK_{role}_API_KEY' if role else 'AZURE_DEEPSEEK_API_KEY'
+    endpoint = os.getenv(endpoint_name, '').strip() or os.getenv('AZURE_DEEPSEEK_ENDPOINT', '').strip()
+    key = os.getenv(key_name, '').strip() or os.getenv('AZURE_DEEPSEEK_API_KEY', '').strip()
     if not endpoint or not key or not model:
-        raise RuntimeError('Set AZURE_DEEPSEEK_ENDPOINT, AZURE_DEEPSEEK_API_KEY and the deployment name in .env')
+        raise RuntimeError(f'Set {endpoint_name}, {key_name} and the deployment name in .env')
     payload = copy.deepcopy(messages)
     if images:
         content = []
@@ -33,4 +38,4 @@ def chat(model, messages, tools=None, json_schema=None, images=None):
     if json_schema:
         options['response_format'] = {'type':'json_schema', 'json_schema':{'name':'result','strict':True,'schema':json_schema}}
     client = OpenAI(base_url=endpoint.rstrip('/'), api_key=key, timeout=90, max_retries=0)
-    return client.chat.completions.create(model=model, messages=payload, **options)
+    return client.chat.completions.create(model=deployment, messages=payload, **options)
