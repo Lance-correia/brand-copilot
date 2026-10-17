@@ -95,9 +95,11 @@ export default function StudioScreen() {
         const job = await api.getJob(current.jobId!);
         if (stopped) return;
         setPending(p => p && p.jobId === current.jobId ? { ...p, job } : p);
+        if (job.designs.length) setDesigns(all => ({ ...all, ...Object.fromEntries(job.designs.map(d => [d.id, d])) }));
         if (job.status === 'done' || job.status === 'error') {
           const next = await api.getThread(current.threadId);
-          const chats = await api.listThreads(ws);
+          const [chats, refreshedAssets] = await Promise.all([api.listThreads(ws), api.listAssets(ws)]);
+          setAssets(refreshedAssets);
           if (stopped) return;
           setThreads(chats); setDesigns(all => ({ ...all, ...Object.fromEntries(job.designs.map(d => [d.id, d])) }));
           if (selected.current === current.threadId) {
@@ -162,9 +164,10 @@ export default function StudioScreen() {
     const files = [...event.clipboardData.items].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter((f): f is File => !!f);
     if (files.length && !uploading && !pending) { event.preventDefault(); void upload(files); }
   }
-  async function send(event: FormEvent) {
-    event.preventDefault();
-    if (pending || sending || uploading || (!text.trim() && !attachments.length)) return;
+  async function send(event?: FormEvent, override?: string) {
+    event?.preventDefault();
+    const messageText = override ?? text;
+    if (pending || sending || uploading || (!messageText.trim() && !attachments.length)) return;
     setSending(true); setError('');
     try {
       await flush(); // The API context must see every quick preview correction before it plans this turn.
@@ -173,9 +176,9 @@ export default function StudioScreen() {
         current = await api.createThread(ws);
         setThread(current); setThreads(list => [current!, ...list]); setParams({ thread: current.id });
       }
-      const draft: Pending = { threadId: current.id, text, attachmentIds: attachments.map(a => a.id) };
+      const draft: Pending = { threadId: current.id, text: messageText, attachmentIds: attachments.map(a => a.id) };
       setPending(draft);
-      const { jobId } = await api.sendThreadMessage(current.id, { text, attachmentAssetIds: draft.attachmentIds, focusDesignIds: focused });
+      const { jobId } = await api.sendThreadMessage(current.id, { text: messageText, attachmentAssetIds: draft.attachmentIds, focusDesignIds: focused });
       const running = { ...draft, jobId }; localStorage.setItem(pendingKey, JSON.stringify(running));
       setPending(running); setText(''); setAttachments([]);
     } catch (e) { setError(errorText(e)); setPending(null); } finally { setSending(false); }
@@ -216,7 +219,8 @@ export default function StudioScreen() {
             <div className="studio-message-byline"><span className="studio-dot" /> Studio</div>
             <p className="studio-progress">{pending.job?.progress ?? 'Getting started…'}</p>
             <ol className="studio-live-steps">{pending.job?.steps?.map((s, i) => <li key={i}>✓ {s}</li>)}</ol>
-            <span className="studio-working">Making room for a good idea<span>…</span></span>
+            {kit && pending.job?.designs.length ? <div className="studio-options studio-live-options">{pending.job.designs.map(d => <OptionCard key={d.id} id={d.id} designs={designs} kit={kit} focused={focused} onFocus={d => void focus(d)} onOpen={d => void openEditor(d)} />)}</div> : null}
+            <span className="studio-working">{pending.job?.designs.length ? `${pending.job.designs.length} option${pending.job.designs.length === 1 ? '' : 's'} ready — you can preview while I finish.` : 'Preparing your editable design…'}</span>
           </section>
         </>}
         <div ref={chatEnd} />
@@ -225,8 +229,12 @@ export default function StudioScreen() {
         {kit?.rules.some(r => r.id === "FONT-FALLBACK") && <p className="studio-font-notice">Using DM Sans as a temporary font. <Link to={`/w/${ws}/brand`}>Set your brand font</Link></p>}
         {error && <p className="studio-error" role="alert">{error}</p>}
         {focused.length > 0 && <div className="studio-focus-chips"><span>In focus</span>{focused.map(id => <button key={id} aria-label={`Remove focus ${designs[id]?.label}`} onClick={() => setFocused(ids => ids.filter(i => i !== id))}>{designs[id]?.label} <small>v{designs[id]?.version ?? 1}</small> ×</button>)}</div>}
-        <form className={`studio-composer${over ? ' drag-over' : ''}`} onSubmit={send} onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop} onPaste={paste}>
+        <form className={`studio-composer${over ? ' drag-over' : ''}`} onSubmit={e => void send(e)} onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop} onPaste={paste}>
           {attachments.length > 0 && <div className="studio-compose-attachments">{attachments.map(a => <div key={a.id}><img src={a.url} alt={a.filename} /><button type="button" aria-label={`Remove ${a.filename}`} onClick={() => setAttachments(list => list.filter(x => x.id !== a.id))}>×</button></div>)}</div>}
+          {attachments.length > 0 && !text.trim() && <div className="studio-reference-actions"><span>Choose what to make</span>
+            <button type="button" disabled={!!pending || sending || uploading} onClick={() => void send(undefined, 'Clean this reference and split it into editable layers. Keep its existing layout and exact copy. Return only the layered reference, without generating new options.')}>Clean & make editable</button>
+            <button type="button" disabled={!!pending || sending || uploading} onClick={() => void send()}>Create four options</button>
+          </div>}
           <textarea aria-label="Message Studio" placeholder="Attach a reference, or ask for a change…" value={text} disabled={!ready || !!pending || sending} rows={2} onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} />
           <div className="studio-composer-tools"><button type="button" className="studio-attach" disabled={!ready || uploading || !!pending || sending} onClick={() => fileInput.current?.click()}>＋ Attach image</button>
@@ -237,7 +245,7 @@ export default function StudioScreen() {
         </form><p className="studio-compose-note">On-brand by default. Editable at every step.</p>
       </div>
     </section>
-    <StudioPreview ws={ws} assets={assets} status={status} />
+    <StudioPreview ws={ws} assets={assets} status={status} designs={designs} flush={flush} />
     {library && <div className="studio-drawer-backdrop" onClick={() => setLibrary(false)}><aside className="studio-library-drawer" aria-label="Brand library" onClick={e => e.stopPropagation()}>
       <header><h2>Brand library</h2><button onClick={() => setLibrary(false)} aria-label="Close brand library">×</button></header>
       <p>Use a name or tag in chat to bring an approved asset into your design.</p>

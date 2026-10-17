@@ -40,11 +40,12 @@ export function OptionCard({ id, designs, kit, focused, onFocus, onOpen }: {
       <select className="studio-version" aria-label={`Version of ${design.label}`} value={versionId} onChange={e => { setVersionId(e.target.value); const earlier = designs[e.target.value]; if (earlier) onFocus(earlier); }}>
         {history.map(d => <option key={d.id} value={d.id}>v{d.version ?? 1}</option>)}
       </select>
-      <span className={`studio-lint${errors === 0 ? ' ok' : ''}`} title="Deterministic brand check">{errors === null ? 'Checking…' : errors ? `${errors} errors` : 'On brand'}</span>
+      <span className={`studio-lint${errors === 0 ? ' ok' : ''}`} title="Deterministic brand check">{errors === null ? 'Checking…' : errors ? `${errors} errors` : 'Brand checked'}</span>
     </div>
     <button className="studio-card-image" aria-label={`Preview ${design.label} v${design.version ?? 1}`} onClick={() => onFocus(design)}>
       {src ? <img src={src} alt={`${design.label} v${design.version ?? 1}`} /> : <span>Rendering…</span>}
     </button>
+    {!!design.quality?.findings.length && <p className="studio-card-review">{design.quality.findings.length} item{design.quality.findings.length === 1 ? '' : 's'} to review in preview</p>}
     <div className="studio-card-actions">
       <button aria-pressed={selected} onClick={() => onFocus(design)}>{selected ? 'Unfocus' : 'Focus'}</button>
       <button onClick={() => onOpen(design)}>Open full editor</button>

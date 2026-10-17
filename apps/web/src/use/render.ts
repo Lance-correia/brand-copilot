@@ -97,7 +97,10 @@ export async function renderDesign(design: Design, kit: BrandKit, scale = 1): Pr
   canvas.setZoom(scale);
   canvas.add(...await Promise.all(design.layers.map(layer => createLayerObject(layer, kit))));
   canvas.renderAll();
-  return el;
+  const result = document.createElement('canvas'); result.width = el.width; result.height = el.height;
+  result.getContext('2d')!.drawImage(el, 0, 0);
+  await canvas.dispose();
+  return result;
 }
 
 /** Average relative luminance (0..1) of the design under a box, without the excluded layer. */

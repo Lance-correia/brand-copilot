@@ -116,6 +116,19 @@ d.text((735,934),'Ledgerly',font=font(48),fill=navy); im.save(sample)
         expect(d.layers.some(l => l.type === 'image' && l.role === 'logo' && l.source === 'brand_asset')).toBe(true);
       }
       expect(originals[0].layers.some(l => l.type === 'image' && l.source === 'generated')).toBe(true);
+      const before = requests.length;
+      await page.getByRole('button', { name: 'Original', exact: true }).click();
+      await expect(page.getByAltText('Original reference')).toBeVisible();
+      await page.screenshot({ path: info.outputPath('original.png') });
+      await page.getByRole('button', { name: 'Clean background', exact: true }).click();
+      await expect(page.getByAltText('Clean reference background without editable text')).toBeVisible();
+      await page.screenshot({ path: info.outputPath('clean-background.png') });
+      const background = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download background', exact: true }).click();
+      await (await background).saveAs(info.outputPath('clean-background-export.png'));
+      await page.getByRole('button', { name: 'Final design', exact: true }).click();
+      await expect(page.locator('.studio-preview canvas.upper-canvas')).toBeVisible();
+      expect(requests.slice(before).filter(url => /\/(messages|chat|images|variants|decompose|agent)(\/|$)/.test(url))).toEqual([]);
     });
     await step('B v2: headline and navy background, no image call', async () => {
       const before = (await assets()).filter(a => a.source === 'generated').map(a => a.id);

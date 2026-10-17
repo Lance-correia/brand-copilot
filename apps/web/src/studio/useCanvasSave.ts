@@ -15,7 +15,7 @@ export function useCanvasSave(onChange: (design: Design) => void) {
     const batch = [...pending.current.values()]; pending.current.clear();
     flight.current = flight.current.catch(() => {}).then(async () => {
       for (const design of batch) {
-        try { await api.saveDesign(design.id, design); }
+        try { const saved = await api.saveDesign(design.id, design); if (!pending.current.has(design.id)) changed.current(saved); }
         catch (e) { if (!pending.current.has(design.id)) pending.current.set(design.id, design); throw e; }
       }
       if (batch.length) setStatus('Saved');
