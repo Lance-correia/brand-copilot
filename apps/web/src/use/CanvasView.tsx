@@ -118,13 +118,23 @@ export function CanvasView({ zoom, onDropAsset }: Props) {
       ctx.restore();
     });
 
+    // Fabric keeps its hidden textarea active when a toolbar or panel takes focus.
+    // Finish the edit before those controls read or change the layer in the store.
+    function finishExternalEdit(event: PointerEvent) {
+      if (event.target instanceof Node && !hostRef.current?.contains(event.target)) {
+        const active = canvas.getActiveObject();
+        if (active instanceof BoxText && active.isEditing) active.exitEditing();
+      }
+    }
+    document.addEventListener('pointerdown', finishExternalEdit, true);
+
     void sync();
     const unsubscribe = store.subscribe((s, prev) => {
       if (s.design !== prev.design || s.kit !== prev.kit) void sync();
       else if (s.selection !== prev.selection) syncSelection();
       else if (s.proposal !== prev.proposal) canvas.requestRenderAll();
     });
-    return () => { unsubscribe(); canvasRef.current = null; void canvas.dispose().then(() => el.remove()); };
+    return () => { document.removeEventListener('pointerdown', finishExternalEdit, true); unsubscribe(); canvasRef.current = null; void canvas.dispose().then(() => el.remove()); };
   }, []);
 
   useEffect(() => {
