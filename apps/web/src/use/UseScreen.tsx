@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { api } from '../api/client';
 import { CopilotPanel, LintPanel, StartModal, VariantsGrid } from '../copilot';
+import { useCopilotStore } from '../copilot/shared';
 import { loadBrandFonts } from '../lib/fonts';
 import type { Asset } from '../types';
 import { CanvasView } from './CanvasView';
@@ -58,7 +59,6 @@ export default function UseScreen() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
-  const [showVariants, setShowVariants] = useState(false);
   const [zoom, setZoom] = useState<number | null>(null); // null = fit to viewport
   const [fit, setFit] = useState(1);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -138,7 +138,7 @@ export default function UseScreen() {
         <span className="use-spacer" />
         <button onClick={() => useCanvasStore.getState().undo()} title="Undo (Cmd/Ctrl+Z)">Undo</button>
         <button onClick={() => useCanvasStore.getState().redo()} title="Redo (Shift+Cmd/Ctrl+Z)">Redo</button>
-        <button onClick={() => setShowVariants(true)}>Variants</button>
+        <button onClick={() => useCopilotStore.setState({ gridOpen: true })}>Variants</button>
         <button disabled={!design} onClick={saveNow} title="Cmd/Ctrl+S">Save</button>
         <button disabled={!design} onClick={() => void exportPng()}>PNG</button>
         <button disabled={!design} onClick={exportJson}>JSON</button>
@@ -160,11 +160,8 @@ export default function UseScreen() {
       {design && <><LayersPanel /><PropertiesPanel ws={ws} assets={assets} onAsset={a => setAssets(list => [...list, a])} /></>}
       <LintPanel />
       <CopilotPanel />
-    </aside>
-    {!design && <div className="use-modal"><StartModal /></div>}
-    {showVariants && <div className="use-modal">
-      <button className="use-modal-close" onClick={() => setShowVariants(false)}>Close</button>
+      <StartModal />
       <VariantsGrid />
-    </div>}
+    </aside>
   </section>;
 }

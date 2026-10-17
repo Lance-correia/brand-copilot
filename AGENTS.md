@@ -15,7 +15,7 @@ cp .env.example .env
 python scripts/seed.py
 ```
 
-API: `cd apps/api && uvicorn app.main:app --reload --port 8000`
+API: `cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`
 
 Web: `cd apps/web && npm run dev` (port 5173, /api proxies to port 8000).
 

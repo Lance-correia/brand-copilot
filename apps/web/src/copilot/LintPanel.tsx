@@ -26,7 +26,7 @@ export function LintPanel() {
   function fix(v: LintViolation) {
     try { useCanvasStore.getState().applyOps(v.fix); } catch (e) { setError(errorText(e)); }
   }
-  const select = (v: LintViolation) => { if (v.layerId) useCanvasStore.setState({ selection: [v.layerId] }); };
+  const select = (v: LintViolation) => { if (v.layerId) useCanvasStore.getState().select([v.layerId]); };
   const groups = (['error', 'warning'] as const).map(severity => [severity, (violations ?? []).filter(v => v.severity === severity)] as const);
 
   return <section className="panel lint">

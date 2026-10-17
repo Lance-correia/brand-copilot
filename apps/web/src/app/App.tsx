@@ -3,7 +3,6 @@ import { Routes, Route, Link, NavLink, useLocation, useMatch } from 'react-route
 import Welcome from '../screens/Welcome';
 import BrandIdentity from '../screens/BrandIdentity';
 import UseScreen from '../use/UseScreen';
-import { StartModal, VariantsGrid, CopilotPanel, LintPanel } from '../copilot';
 import { getWorkspace } from '../api/client';
 import type { Workspace } from '../types';
 import './styles.css';
@@ -33,19 +32,11 @@ function TopBar() {
   </header>;
 }
 
-// ponytail: copilot panels mount here because UseScreen (Prompt 2) is still a placeholder; move them into UseScreen if it takes over layout.
-function UseLayout() {
-  return <div className="use-layout">
-    <div className="use-main"><UseScreen /></div>
-    <aside className="use-side"><StartModal /><VariantsGrid /><CopilotPanel /><LintPanel /></aside>
-  </div>;
-}
-
 export function App() {
   return <><TopBar /><main><Routes>
     <Route path="/" element={<Welcome />} />
     <Route path="/w/:id/brand" element={<BrandIdentity />} />
-    <Route path="/w/:id/use" element={<UseLayout />} />
+    <Route path="/w/:id/use" element={<UseScreen />} />
     <Route path="*" element={<p>Page not found. <Link to="/">Go home</Link></p>} />
   </Routes></main></>;
 }

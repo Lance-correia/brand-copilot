@@ -22,7 +22,7 @@ packages/schema/           JSON Schemas + CONTRACTS.md                (Prompt 0,
 fixtures/                  sample brand, samples, designs, templates  (Prompt 0)
 data/                      runtime SQLite + files (gitignored)
 Run and environment
-• API: cd apps/api && uvicorn app.main:app --reload --port 8000
+• API: cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 • Web: cd apps/web && npm run dev (port 5173; Vite proxies /api to port 8000)
 • Storage: SQLite at data/app.db; files at data/files/{workspaceId}/{assetId}.{ext}
 • Single user, no login.
@@ -123,7 +123,7 @@ Workspace
 Prompt 3
 POST
 /workspaces/{ws}/assets
-multipart: file, kind
+multipart: file, kind, tags? (comma-separated folder tags)
 Asset
 Prompt 3
 GET
