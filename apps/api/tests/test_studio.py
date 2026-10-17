@@ -184,3 +184,17 @@ def test_failed_split_stops_turn_instead_of_repeating_model_calls(studio,monkeyp
     assert 'without uploading it again' in job['reply']
     assert 'min()' not in job['reply']
     assert thread['id'] not in agent.ACTIVE
+
+
+def test_split_only_request_publishes_reference_card(studio,monkeypatch):
+    ws,client,thread,design=studio
+    monkeypatch.setenv('USE_STUBS','0')
+    sample=storage.list_assets(ws,'sample')[0]
+    responses=iter([tool_message('split_into_layers',{'assetId':sample.id}),tool_message('reply',{'text':'Split into editable layers.'})])
+    monkeypatch.setattr(agent.deepseek,'chat',lambda *a,**k:next(responses))
+    monkeypatch.setattr(agent.pipeline,'run_decompose',lambda job,ws,asset:c.add_design(job,ws,design))
+    r=client.post(f'/api/threads/{thread["id"]}/messages',json={'text':'Split this reference','attachmentAssetIds':[sample.id]})
+    job=client.get('/api/jobs/'+r.json()['jobId']).json()
+    assert job['status']=='done' and len(job['designs'])==1
+    assert job['designs'][0]['label']=='Reference'
+    assert client.get('/api/threads/'+thread['id']).json()['messages'][-1]['designIds']==[design['id']]

@@ -111,3 +111,31 @@ if __name__ == '__main__':
         if name.startswith('test_'):
             fn()
             print('PASS', name)
+
+
+def test_short_headline_is_not_mistaken_for_raster_logo(monkeypatch):
+    from types import SimpleNamespace
+    logo=storage.list_assets(WS,'image')[0]
+    kit=SimpleNamespace(logos=[SimpleNamespace(assetId=logo.id)])
+    from app.decompose import pipeline
+    monkeypatch.setattr(pipeline,'dhash',lambda image:[False]*64)
+    # A text crop can share a perceptual hash with a mostly blank raster logo.
+    crop=Image.new('RGB',(240,40),'white')
+    assert pipeline.match_logo(kit,'Lumen',{'type':'text','text':'Fresh mornings'},crop) is None
+
+
+def test_local_ink_refines_separate_headline_rows():
+    from app.decompose.pipeline import refine_text_boxes
+    from PIL import ImageFont
+    im=Image.new('RGB',(488,612),'white')
+    draw=ImageDraw.Draw(im)
+    font=ImageFont.truetype(str(c.FIXTURES/'brand/fonts/DMSans.ttf'),40)
+    texts=['Suddenly you are','fluent in finance.']
+    for y,text in zip([80,140],texts): draw.text((54,y),text,font=font,fill='#000044')
+    elements=[]
+    for text,box in zip(texts,[(54,79,400,86),(54,110,400,147)]):
+        e={'text':text,'colorHex':'#000044'}
+        elements.append((e,box,im.crop(box)))
+    refined=refine_text_boxes(elements,im)
+    assert refined[0][1][3]-refined[0][1][1]>20
+    assert refined[1][1][1]>refined[0][1][3]

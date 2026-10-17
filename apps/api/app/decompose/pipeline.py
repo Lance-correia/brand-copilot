@@ -121,7 +121,7 @@ def match_logo(kit, ws_name, element, crop):
         names = [wordmark(asset), ws_name.split()[0] if ws_name else '']
         if read and any(n and difflib.SequenceMatcher(None, read, n.lower()).ratio() > 0.6 for n in names):
             return logo
-        if asset.mime.startswith('image/') and asset.mime != 'image/svg+xml':
+        if element['type'] != 'text' and asset.mime.startswith('image/') and asset.mime != 'image/svg+xml':
             a, b = dhash(flat(storage.asset_path(asset.id))), dhash(crop)
             if sum(x != y for x, y in zip(a, b)) <= 12:
                 return logo
@@ -143,6 +143,53 @@ def solid(crop, fill, share=0.6):
     """True when most of the crop is close to the fill color (a button or panel, not an illustration)."""
     px = list(crop.convert('RGB').resize((24, 24)).getdata())
     return sum(sum(abs(a - b) for a, b in zip(p, fill)) < 60 for p in px) >= share * len(px)
+
+def refine_text_boxes(texts, image):
+    """Tighten approximate vision boxes to local ink. Keep separate text blocks on separate rows.
+
+    This only measures pixels already on disk; it does not call a model. Uncertain and multiline
+    blocks retain their original boxes rather than guessing at photo content.
+    """
+    used, refined = [], list(texts)
+    for i in sorted(range(len(texts)), key=lambda k: texts[k][1][1]):
+        e, original_box, crop = texts[i]
+        if '\n' in e['text'] or not re.fullmatch(r'#[0-9a-fA-F]{6}',e['colorHex']):
+            continue
+        x0,y0,x1,y1 = original_box
+        pad = max(y1-y0, image.height*.1)
+        left,right = max(0,int(x0-image.width*.025)),min(image.width,int(x1+image.width*.025))
+        top,bottom = max(0,int(y0-pad)),min(image.height,int(y1+pad))
+        target = c.rgb(e['colorHex'])
+        pixels = image.load()
+        ink = [[sum(abs(a-b) for a,b in zip(pixels[x,y],target)) < 75 for x in range(left,right)] for y in range(top,bottom)]
+        if not ink: continue
+        active = [sum(row) >= max(3,(right-left)*.012) for row in ink]
+        runs, start = [], None
+        for y, on in enumerate(active+[False]):
+            if on and start is None: start=y
+            if not on and start is not None:
+                if y-start >= 4: runs.append((start,y))
+                start=None
+        candidates=[]
+        for lo,hi in runs:
+            # A large area of matching color is a panel/photo, not a text line.
+            if hi-lo > image.height*.13: continue
+            columns=[x for x in range(right-left) if any(ink[y][x] for y in range(lo,hi))]
+            groups=[]
+            for x in columns:
+                if not groups or x-groups[-1][-1] > max(8,(hi-lo)*.65): groups.append([])
+                groups[-1].append(x)
+            for xs in groups:
+                box=(left+xs[0],top+lo,left+xs[-1]+1,top+hi)
+                if box[2]-box[0] < max(12,len(e['text'])*1.5): continue
+                if any(iou(box,b)>.2 for b in used): continue
+                distance=abs((box[1]+box[3]-y0-y1)/2)+abs((box[0]+box[2]-x0-x1)/2)*.2
+                candidates.append((distance,box))
+        if not candidates: continue
+        _,box=min(candidates)
+        used.append(box)
+        refined[i]=(e,box,image.crop(box))
+    return refined
 
 def text_geometry(texts, kit, W):
     """Text layers from (element, pixel box, crop). Sizes are shared per role (lines of one headline match),
@@ -241,6 +288,7 @@ def run_decompose(job_id, ws, sample):
             texts.append((e, (x0, y0, x1, y1), crop))
         elif e['type'] == 'shape':
             shapes.append((e, (x0, y0, x1, y1), crop))
+    texts = refine_text_boxes(texts, original)
     text_layers = text_geometry(texts, kit, W)
     holes += [(l['x'], l['y'], l['x'] + l['w'], l['y'] + l['h']) for l in text_layers]
     c.update_job(job_id, progress='Cleaning background')

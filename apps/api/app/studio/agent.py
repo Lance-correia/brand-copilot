@@ -278,6 +278,11 @@ class Session:
                     self.step(f"Could not {call.function.name.replace('_',' ')}: {result['error']}")
                 messages.append({'role':'tool','tool_call_id':call.id,'content':json.dumps(result)})
             if self.reply_text or self.calls >= MAX_STEPS: break
+        # A split-only request must return a visible card even when no later tool edits or generates options.
+        if not self.outputs and self.sources:
+            source = dict(self.design(next(reversed(self.sources.values()))))
+            source.update(label='Reference',version=1)
+            self.publish(source)
         if not self.reply_text:
             self.reply_text = self.summary() or 'No designs changed. Please clarify the change you want.'
         self.reply_text = re.sub(r'\*\*|`', '', self.reply_text).strip()
