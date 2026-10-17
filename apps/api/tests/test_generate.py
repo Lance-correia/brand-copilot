@@ -177,4 +177,5 @@ def test_clean_plate_preserves_flat_panel_under_text(monkeypatch):
     monkeypatch.setattr(pipeline.images,'edit',lambda *a,**k:bad.getvalue())
     plate,ok=pipeline.clean_plate(original,[(40,45,300,90)])
     assert ok and plate.getpixel((100,65))==(255,255,255)
+    assert plate.getpixel((30,60))==(255,255,255)  # feathered edge must not leak model red
     assert plate.getpixel((10,10))==original.getpixel((10,10))

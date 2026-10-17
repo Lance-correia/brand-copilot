@@ -93,7 +93,9 @@ def clean_plate(original, holes):
             edited = Image.open(io.BytesIO(data)).convert('RGB').resize((pw, ph))
         except Exception:
             ok = False
-    edited.paste(work,mask=flat_mask)
+    # Protect the feathered edge too: model output just outside a flat fill can invent
+    # borders/shadows that would otherwise bleed back through the blurred composite mask.
+    edited.paste(work,mask=flat_mask.filter(ImageFilter.MaxFilter(25)))
     holes_l = mask.getchannel('A').point(lambda a: 255 - a).crop((0, 0, w, h)).resize((W, H)).filter(ImageFilter.GaussianBlur(3))
     plate = original.copy()
     plate.paste(edited.crop((0, 0, w, h)).resize((W, H)), mask=holes_l)
