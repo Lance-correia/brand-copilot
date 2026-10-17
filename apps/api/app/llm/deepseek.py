@@ -39,3 +39,30 @@ def chat(model, messages, tools=None, json_schema=None, images=None):
         options['response_format'] = {'type':'json_schema', 'json_schema':{'name':'result','strict':True,'schema':json_schema}}
     client = OpenAI(base_url=endpoint.rstrip('/'), api_key=key, timeout=90, max_retries=0)
     return client.chat.completions.create(model=deployment, messages=payload, **options)
+
+def pro():
+    return os.getenv('DEEPSEEK_PRO_MODEL')
+
+def flash():
+    return os.getenv('DEEPSEEK_FLASH_MODEL')
+
+def retry(fn, *args, **kwargs):
+    """Call fn once more if the first call raises; model errors are often transient."""
+    try:
+        return fn(*args, **kwargs)
+    except PermissionError:
+        raise
+    except Exception:
+        return fn(*args, **kwargs)
+
+def chat_json(model, prompt, schema, images=None, system=None):
+    """Schema-enforced JSON completion, parsed. Retries once on API or parse errors."""
+    import json
+    messages = ([{'role':'system','content':system}] if system else []) + [{'role':'user','content':prompt}]
+    def once():
+        result = chat(model, messages, json_schema=schema, images=images)
+        text = result.choices[0].message.content or ''
+        # Some deployments wrap JSON in a fence despite response_format.
+        text = text.strip().removeprefix('```json').removeprefix('```').removesuffix('```')
+        return json.loads(text)
+    return retry(once)

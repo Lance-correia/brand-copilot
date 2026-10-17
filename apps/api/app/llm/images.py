@@ -14,18 +14,24 @@ def image_prompt(prompt):
 def client():
     if not os.getenv('OPENAI_API_KEY'):
         raise RuntimeError('Set OPENAI_API_KEY in .env')
-    return OpenAI(api_key=os.environ['OPENAI_API_KEY'], timeout=180, max_retries=0)
+    return OpenAI(api_key=os.environ['OPENAI_API_KEY'], timeout=120, max_retries=0)
 
 def decode(result):
     if not result.data or not result.data[0].b64_json:
         raise RuntimeError('Images API returned no base64 image')
     return base64.b64decode(result.data[0].b64_json)
 
-def generate(prompt, width, height, model):
-    model = model or os.getenv('IMAGE_MODEL_FAST', 'gpt-image-2.5-flare')
-    return decode(client().images.generate(model=model, prompt=image_prompt(prompt), size=f'{width}x{height}', n=1, output_format='png'))
+def image_size(w, h, area=1024 * 1024):
+    """Size for a w x h slot: about `area` pixels, aspect clamped to 1:3..3:1, both sides divisible by 16."""
+    aspect = min(3, max(1 / 3, w / h))
+    return round((area * aspect) ** 0.5 / 16) * 16, round((area / aspect) ** 0.5 / 16) * 16
 
-def edit(image_path, instruction, model, mask_path=None):
+def generate(prompt, width, height, model=None, quality='medium'):
+    model = model or os.getenv('IMAGE_MODEL_FAST', 'gpt-image-2.5-flare')
+    return decode(client().images.generate(model=model, prompt=image_prompt(prompt), size=f'{width}x{height}',
+                                           quality=quality, n=1, output_format='png'))
+
+def edit(image_path, instruction, model=None, mask_path=None):
     # Check known stored inputs as a second guard after the HTTP route's source check.
     path = Path(image_path).resolve()
     if path.is_relative_to((config.DATA_DIR / 'files').resolve()):
