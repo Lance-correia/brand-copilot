@@ -135,6 +135,23 @@ def test_designs_crud(monkeypatch):
     assert client.post(f'/api/workspaces/{other}/designs', json={**design, 'workspaceId': other}).status_code == 409
     assert client.get('/api/designs/des_missing').status_code == 404
 
+def test_workspaces_and_lint_route(monkeypatch):
+    import json
+    ws = bare_workspace(monkeypatch)
+    assert ws in {w['id'] for w in client.get('/api/workspaces').json()}
+    assert client.get(f'/api/workspaces/{ws}').json()['name'] == 'Test brand'
+    assert client.get('/api/workspaces/ws_missing').status_code == 404
+    upload_brand(ws, with_pdf=False)
+    kit = client.post(f'/api/workspaces/{ws}/brand-kit/extract').json()
+    design = json.loads((FIXTURES / 'designs/03-violations.json').read_text())
+    design.update(workspaceId=ws, background={'colorToken': kit['colors'][0]['token']})
+    violations = client.post(f'/api/workspaces/{ws}/lint', json=design)
+    assert violations.status_code == 200, violations.text
+    for v in violations.json():
+        validate_contract('LintViolation', v)
+    assert 'SAFE-01' in {v['ruleId'] for v in violations.json()}  # fixture logo ast_01 is not in this kit
+    assert client.post(f'/api/workspaces/{ws}/lint', json={**design, 'workspaceId': 'ws_other'}).status_code == 422
+
 @pytest.mark.skipif(not os.getenv('LIVE_MODELS'), reason='set LIVE_MODELS=1 to call DeepSeek')
 def test_live_caption(monkeypatch):
     ws = bare_workspace(monkeypatch)

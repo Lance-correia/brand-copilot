@@ -28,7 +28,10 @@ SYSTEM = ('You extract a brand kit from brand guidelines. Return JSON matching t
           'role is accent, text, background or neutral. fonts: token is headline, body or another short role name; '
           'assetId is the id of the uploaded font file with the same family; sizes are pixels. '
           'logos: one entry per uploaded logo assetId; variant dark means for light backgrounds; clearSpace is a multiple of logo height. '
-          'safeMarginPct is a percentage of the canvas. rules: one per stated rule; use check manual when it cannot be checked automatically. '
+          'safeMarginPct is a percentage of the canvas. rules: one per stated rule, with ids like COL-01, FONT-01, LOGO-01. '
+          'These checks run automatically, so use them whenever a rule is about that topic: palette (only brand colors), '
+          'font (brand fonts and size ranges), contrast, safe_margin, logo_min_size, logo_clear_space, text_overflow. '
+          'Use check manual only for rules none of these cover. '
           'imageryStyle and voice are one sentence each. confirmed is false.')
 
 def slug(text):
@@ -184,8 +187,10 @@ def extract_brand_kit(ws_id) -> BrandKit:
             ids.add(rule['id'])
             rules.append({'id': str(rule['id']), 'text': str(rule.get('text', '')), 'check': rule['check']})
 
+    # Lint always runs every automatic check, so the kit lists a rule for each one.
+    rules += [r for r in DEFAULT_RULES if r['check'] not in {x['check'] for x in rules} and r['id'] not in ids]
     kit = {'workspaceId': ws_id, 'colors': colors, 'fonts': link_fonts(draft.get('fonts') or [], fonts), 'logos': logo_rules,
            'safeMarginPct': min(num(draft.get('safeMarginPct'), 6), 50),
            'imageryStyle': str(draft.get('imageryStyle') or ''), 'voice': str(draft.get('voice') or ''),
-           'rules': rules or DEFAULT_RULES, 'confirmed': False}
+           'rules': rules, 'confirmed': False}
     return BrandKit.model_validate(validate_contract('BrandKit', kit))
