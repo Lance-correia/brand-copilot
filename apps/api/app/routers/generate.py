@@ -72,7 +72,7 @@ def start_job(ws, body, count):
 def decompose(ws: str, body: SampleRequest, tasks: BackgroundTasks):
     if use_stubs():
         return start_job(ws, body, 1)
-    from app.generate.decompose import run_decompose
+    from app.decompose.pipeline import run_decompose
     sample = sample_for(ws, body)
     job_id = common.new_job()
     tasks.add_task(common.run_job, job_id, run_decompose, ws, sample)

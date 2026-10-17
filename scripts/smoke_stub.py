@@ -10,7 +10,7 @@ sys.path.insert(0,str(ROOT/'apps/api'))
 import httpx
 from app.core.validation import validate_contract
 
-client=httpx.Client(base_url=os.getenv('BASE_URL','http://localhost:8000/api'),timeout=60)
+client=httpx.Client(base_url=os.getenv('BASE_URL','http://127.0.0.1:8000/api'),timeout=60)
 covered=set()
 
 def call(method,path,shape=None,status=200,**kwargs):
