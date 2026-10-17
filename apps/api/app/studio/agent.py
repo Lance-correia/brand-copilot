@@ -42,7 +42,7 @@ class Session:
         self.job_id, self.thread, self.ws = job_id, thread, thread['workspaceId']
         self.kit = storage.get_brand_kit(self.ws)
         self.text, self.attachments, self.focus = text, attachments, focus
-        self.aliases, self.outputs, self.sources = {}, {}, {}
+        self.aliases, self.outputs, self.sources, self.changes = {}, {}, {}, {}
         self.allowed = set(focus)
         self.reply_text = ''
         self.calls = 0
@@ -72,17 +72,25 @@ class Session:
         designs = [self.design(i) for i in sorted(self.allowed)]
         unique = {d['id']:d for d in designs}
         latest = {}
-        # Thread order resolves equal-version branches; explicitly focused versions take precedence.
+        # Thread order resolves equal-version branches; named labels always point to their newest version.
         ids = [i for m in self.thread['messages'][-20:] for i in m['designIds']] + list(self.outputs_id()) + self.focus
         for i in ids:
             if i in self.allowed:
                 d = self.design(i)
-                if d.get('label'): latest[d['label']] = d['id']
+                if d.get('label'):
+                    previous = latest.get(d['label'])
+                    if not previous or d.get('version',1) >= self.design(previous).get('version',1):
+                        latest[d['label']] = d['id']
         return {'brandKit':self.kit.model_dump(mode='json', exclude_unset=True),
                 'assets':[{'id':a.id,'kind':a.kind,'source':a.source,'caption':a.caption,'filename':a.filename,'tags':a.tags}
                           for a in storage.list_assets(self.ws)],
                 'messages':self.thread['messages'][-20:], 'designs':list(unique.values()), 'latestByLabel':latest,
                 'focusDesignIds':[self.aliases.get(i,i) for i in self.focus], 'attachmentAssetIds':self.attachments}
+
+    def summary(self):
+        return '\n'.join(f"{d.get('label',d['name'])} v{d.get('version',1)}: " +
+                         '; '.join(self.changes.get(d.get('label') or d['id'], ['updated'])) + '.'
+                         for d in self.outputs.values())
 
     def outputs_id(self):
         return [d['id'] for d in self.outputs.values()]
@@ -142,6 +150,7 @@ class Session:
         for i, design in enumerate(designs):
             design.update(label=f'Option {chr(65+i)}', version=1)
             self.publish(design)
+            self.changes[design['label']] = [design['name'].split(': ',1)[-1][:80]]
         self.step('Four editable options are ready')
         return {'designs':designs}
 
@@ -150,6 +159,7 @@ class Session:
             self.reply_text = str(args['text']).strip()
             return {'reply':self.reply_text}
         if name == 'search_assets':
+            self.step('Searching your approved brand assets')
             words = set(re.findall(r'\w+',args['query'].lower()))
             assets = [a for a in storage.list_assets(self.ws,args.get('kind')) if a.source=='brand_asset']
             def score(a): return len(words & set(re.findall(r'\w+', ' '.join([a.filename,a.caption,*a.tags]).lower())))
@@ -159,6 +169,7 @@ class Session:
         if name == 'generate_options': return self.options(args)
         design = self.design(args['designId'])
         if name == 'run_lint':
+            self.step(f"Checking {design.get('label',design['name'])} against your brand")
             return {'violations':[v.model_dump(mode='json') for v in lint_design(design,self.kit)]}
         self.step(f"{design.get('label',design['name'])}: {name.replace('_',' ')}")
         if name in ('replace_image','place_brand_asset'):
@@ -195,7 +206,16 @@ class Session:
                         and (l['role']=='background' or l['w']*l['h']>design['width']*design['height']*.35)]
         else:
             raise ValueError(f'Unknown tool {name}')
-        return self.apply(design,ops)
+        result = self.apply(design,ops)
+        key = result['design'].get('label') or result['design']['id']
+        if name == 'update_layer' and 'text' in args.get('props',{}):
+            note = 'text changed to “' + str(args['props']['text'])[:80] + '”'
+        elif name == 'set_background': note = args['colorToken'] + ' background'
+        elif name == 'replace_image': note = 'photo swapped for ' + asset.filename[:65]
+        elif name == 'edit_generated_image': note = 'generated image updated'
+        else: note = name.replace('_',' ')
+        self.changes.setdefault(key,[]).append(note)
+        return result
 
     def loop(self):
         self.step('Reviewing your brand, conversation and current designs')
@@ -206,7 +226,7 @@ class Session:
             self.options({'sourceDesignId':source['id'],'n':4})
             self.calls = 2
             self.reply_text = 'Created Options A–D from your reference, with editable text, brand colors, fonts and imagery.'
-            request_text = 'The reference has already been split and Options A–D have been generated in this turn. Briefly describe each existing option using reply. Do not generate or edit anything else.'
+            request_text = 'The reference has already been split and Options A–D have been generated in this turn. Use reply to describe each in one short sentence, under 500 characters total, plain text. Do not generate or edit anything else.'
         if use_stubs():
             self.reply_text = self.reply_text or 'Studio is in stub mode. Attach a reference to create four editable options.'
             return
@@ -239,7 +259,10 @@ class Session:
                 messages.append({'role':'tool','tool_call_id':call.id,'content':json.dumps(result)})
             if self.reply_text or self.calls >= MAX_STEPS: break
         if not self.reply_text:
-            self.reply_text = '; '.join(f"{d.get('label',d['name'])} v{d.get('version',1)} updated" for d in self.outputs.values()) or 'No designs changed. Please clarify the change you want.'
+            self.reply_text = self.summary() or 'No designs changed. Please clarify the change you want.'
+        self.reply_text = re.sub(r'\*\*|`', '', self.reply_text).strip()
+        if len(self.reply_text) > 500:
+            self.reply_text = self.summary() or self.reply_text[:497].rsplit(' ',1)[0] + '…'
 
 
 def run_message(job_id, thread_id, text, attachments, focus):
