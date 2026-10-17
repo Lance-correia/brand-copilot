@@ -109,6 +109,22 @@ class ShapeLayer(ContractModel):
 
 Layer = TextLayer | ImageLayer | ShapeLayer
 
+class DesignProvenance(ContractModel):
+    referenceAssetId: Annotated[str, Field(pattern='^ast_[A-Za-z0-9_-]+$')]
+    cleanPlateAssetId: Annotated[str, Field(pattern='^ast_[A-Za-z0-9_-]+$')] | None = None
+
+class QualityFinding(ContractModel):
+    code: str
+    severity: Literal['error', 'warning']
+    message: str
+    layerId: str | None = None
+
+class DesignQuality(ContractModel):
+    status: Literal['ready', 'needs_review']
+    checkedAt: str
+    checks: list[str]
+    findings: list[QualityFinding]
+
 class Design(ContractModel):
     id: Annotated[str, Field(pattern='^des_[A-Za-z0-9_-]+$')]
     workspaceId: Annotated[str, Field(pattern='^ws_[A-Za-z0-9_-]+$')]
@@ -120,6 +136,8 @@ class Design(ContractModel):
     label: Annotated[str, Field(max_length=80)] | None = None
     version: Annotated[int, Field(ge=1)] | None = None
     parentId: Annotated[str, Field(pattern='^des_[A-Za-z0-9_-]+$')] | None = None
+    provenance: DesignProvenance | None = None
+    quality: DesignQuality | None = None
 
 class DesignSpecRegionsItem(ContractModel):
     role: Literal['background', 'hero', 'headline', 'subhead', 'body', 'cta', 'cta_bg', 'logo', 'decoration']

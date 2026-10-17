@@ -112,6 +112,25 @@ export interface ShapeLayer {
 
 export type Layer = TextLayer | ImageLayer | ShapeLayer;
 
+export interface DesignProvenance {
+  referenceAssetId: string;
+  cleanPlateAssetId?: string;
+}
+
+export interface QualityFinding {
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+  layerId?: string;
+}
+
+export interface DesignQuality {
+  status: "ready" | "needs_review";
+  checkedAt: string;
+  checks: Array<string>;
+  findings: Array<QualityFinding>;
+}
+
 export interface Design {
   id: string;
   workspaceId: string;
@@ -123,6 +142,8 @@ export interface Design {
   label?: string;
   version?: number;
   parentId?: string;
+  provenance?: DesignProvenance;
+  quality?: DesignQuality;
 }
 
 export interface DesignSpecRegionsItem {

@@ -43,6 +43,12 @@
     "parentId": {
       "type": "string",
       "pattern": "^des_[A-Za-z0-9_-]+$"
+    },
+    "provenance": {
+      "$ref": "#/$defs/DesignProvenance"
+    },
+    "quality": {
+      "$ref": "#/$defs/DesignQuality"
     }
   },
   "required": [
@@ -65,6 +71,84 @@
       },
       "required": [
         "colorToken"
+      ],
+      "additionalProperties": false
+    },
+    "DesignProvenance": {
+      "type": "object",
+      "properties": {
+        "referenceAssetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        },
+        "cleanPlateAssetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "referenceAssetId"
+      ],
+      "additionalProperties": false
+    },
+    "QualityFinding": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "layerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "DesignQuality": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "needs_review"
+          ]
+        },
+        "checkedAt": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QualityFinding"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "checkedAt",
+        "checks",
+        "findings"
       ],
       "additionalProperties": false
     }
