@@ -87,6 +87,25 @@ def test_image_edit_rejects_brand_asset_without_model_call():
         os.environ['USE_STUBS'] = '1'
     assert r.status_code == 403 and r.json() == {'error':'Brand assets are locked'}
 
+def test_failed_image_becomes_accent_placeholder():
+    t = c.templates()[0]
+    plans = [{'templateId':t['id'], 'angle':f'Angle {i}', 'copy':{'headline':'Fresh roast', 'subhead':'Beans', 'cta':'Order'},
+              'assetPicks':[], 'imagePrompts':[{'role':'hero', 'prompt':'A cup'}],
+              'colors':{'background':'paper', 'accent':'primary', 'text':'ink'}} for i in range(4)]
+    def fail(*a, **k):
+        raise TimeoutError('image model down')
+    saved = variants.plan, variants.sample_spec, images.generate
+    variants.plan, variants.sample_spec, images.generate = (lambda *a: plans), (lambda s: {}), fail
+    try:
+        job_id = c.new_job()
+        c.run_job(job_id, variants.run_variants, WS, storage.list_assets(WS, 'sample')[0], None)
+    finally:
+        variants.plan, variants.sample_spec, images.generate = saved
+    job = c.JOBS[job_id]
+    assert job['status'] == 'done' and len(job['designs']) == 4 and 'placeholder' in job['progress'], job['progress']
+    hero = next(l for l in job['designs'][0]['layers'] if l['role'] == 'hero')
+    assert hero['type'] == 'shape' and hero['fillToken'] == 'primary'
+
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_'):
