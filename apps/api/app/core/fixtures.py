@@ -3,6 +3,7 @@ from copy import deepcopy
 from . import db
 from .config import FIXTURES
 from .storage import save_asset
+from .captions import caption_asset
 from .validation import validate_contract
 from app.schema import Workspace
 
@@ -27,6 +28,7 @@ def seed_workspace(ws_id='ws_lumen', name='Lumen Coffee') -> Workspace:
             mapping[item['id']] = existing_assets[filename]['id']
         else:
             asset = save_asset(ws_id, (FIXTURES / item['path']).read_bytes(), filename, item['kind'], item['source'], item.get('meta'))
+            caption_asset(asset.id, use_model=False)
             mapping[item['id']] = asset.id
     kit = read_fixture('brand/brand-kit.json')
     kit['workspaceId'] = ws_id
