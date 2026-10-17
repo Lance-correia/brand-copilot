@@ -153,7 +153,7 @@ def refine_text_boxes(texts, image):
     used, refined = [], list(texts)
     for i in sorted(range(len(texts)), key=lambda k: texts[k][1][1]):
         e, original_box, crop = texts[i]
-        if '\n' in e['text'] or not re.fullmatch(r'#[0-9a-fA-F]{6}',e['colorHex']):
+        if e.get('localOcr') or '\n' in e['text'] or not re.fullmatch(r'#[0-9a-fA-F]{6}',e['colorHex']):
             continue
         x0,y0,x1,y1 = original_box
         pad = max(y1-y0, image.height*.1)
@@ -183,6 +183,7 @@ def refine_text_boxes(texts, image):
                 box=(left+xs[0],top+lo,left+xs[-1]+1,top+hi)
                 if box[2]-box[0] < max(12,len(e['text'])*1.5): continue
                 if any(iou(box,b)>.2 for b in used): continue
+                if abs((box[1]+box[3]-y0-y1)/2)>max((y1-y0)*1.5,image.height*.05): continue
                 distance=abs((box[1]+box[3]-y0-y1)/2)+abs((box[0]+box[2]-x0-x1)/2)*.2
                 candidates.append((distance,box))
         if not candidates: continue
@@ -200,7 +201,7 @@ def text_geometry(texts, kit, W):
         by_role.setdefault(e['role'], []).append(r)
     layers = []
     for e, (x0, y0, x1, y1), crop in texts:
-        font = nearest_font(kit, e['fontStyle'])
+        font = nearest_font(kit, e['fontStyle'], e['role'])
         text = e['text'].strip()
         lines = text.split('\n')
         size = round(min(font.maxSize, max(font.minSize, statistics.median(by_role[e['role']]) * 0.9)))
@@ -251,8 +252,11 @@ def iou(a, b):
     area = lambda r: (r[2] - r[0]) * (r[3] - r[1])
     return ix / (area(a) + area(b) - ix or 1)
 
-def nearest_font(kit, style):
+def nearest_font(kit, style, role=None):
     require_design_kit(kit)
+    if role and role != 'headline':
+        body = next((f for f in kit.fonts if f.token=='body'),None)
+        if body: return body
     is_serif = lambda f: 'serif' in f.family.lower() and 'sans' not in f.family.lower()
     return min(kit.fonts, key=lambda f: (is_serif(f) != style['serif']) * 1000 + abs(f.weight - style['weight']))
 
@@ -274,6 +278,8 @@ def run_decompose(job_id, ws, sample):
     c.update_job(job_id, progress='Reading layers')
     elements = read_elements(path)
     ws_name = db.get('Workspace', ws).get('name', '')
+    from .ocr import read_text, refine_elements
+    elements = refine_elements(elements,read_text(path),original,kit,ws_name)
     texts, logos, shapes, holes = [], [], [], []
     for e in elements:
         x0, y0, x1, y1 = px(e['box'])
@@ -281,7 +287,7 @@ def run_decompose(job_id, ws, sample):
         # A short text that reads as the brand wordmark is the logo (Flash labels wordmarks either way).
         logo = match_logo(kit, ws_name, e, crop) if e['type'] == 'logo' or len(e['text'].split()) <= 2 else None
         if logo:
-            box = logo_box(logo, (x0, y0, x1, y1), W)
+            box = (x0,y0,x1,y1) if e.get('localOcr') else logo_box(logo, (x0, y0, x1, y1), W)
             logos.append((box, logo))
             holes.append(box)
         elif e['type'] == 'text' and e['text'].strip():

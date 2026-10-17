@@ -139,3 +139,30 @@ def test_local_ink_refines_separate_headline_rows():
     refined=refine_text_boxes(elements,im)
     assert refined[0][1][3]-refined[0][1][1]>20
     assert refined[1][1][1]>refined[0][1][3]
+
+
+def test_local_ocr_restores_omitted_headline_and_anchors_body_text():
+    from app.decompose.ocr import refine_elements
+    im=Image.new('RGB',(488,612),'white')
+    elements=[{'type':'text','text':'Terms apply.','box':[.7,.5,.9,.55],'role':'body','colorHex':'#1B1B1F',
+               'fontStyle':{'serif':False,'weight':400,'italic':False},'align':'left'},
+              {'type':'photo','text':'','box':[0,.5,1,1],'role':'hero','colorHex':'#FFFFFF',
+               'fontStyle':{'serif':False,'weight':400,'italic':False},'align':'left'}]
+    lines=[{'text':"Suddenly you're",'confidence':1,'box':[.1,.13,.82,.23],'angle':0},
+           {'text':'fluent in finance.','confidence':1,'box':[.1,.23,.86,.33],'angle':0},
+           {'text':'Terms apply.','confidence':1,'box':[.72,.40,.88,.43],'angle':0},
+           {'text':'3,350.00','confidence':1,'box':[.4,.64,.55,.71],'angle':20}]
+    refined=refine_elements(elements,lines,im,KIT,'Lumen')
+    text=[e for e in refined if e['type']=='text']
+    assert {e['text'] for e in text}=={"Suddenly you're",'fluent in finance.','Terms apply.'}
+    assert next(e for e in text if e['text']=='Terms apply.')['box']==lines[2]['box']
+    assert all(e['localOcr'] for e in text)
+
+
+def test_bold_button_uses_body_font_instead_of_headline_minimum():
+    from types import SimpleNamespace
+    from app.decompose.pipeline import nearest_font
+    head=SimpleNamespace(token='headline',family='DM Sans',weight=700)
+    body=SimpleNamespace(token='body',family='DM Sans',weight=400)
+    kit=SimpleNamespace(colors=[object()],fonts=[head,body])
+    assert nearest_font(kit,{'serif':False,'weight':700},'cta') is body
