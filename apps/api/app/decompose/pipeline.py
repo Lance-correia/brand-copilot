@@ -2,6 +2,10 @@
 import difflib
 import re
 import statistics
+import hashlib
+import json
+import time
+from datetime import datetime, timezone
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -60,47 +64,10 @@ def ring_color(image, box, width=12):
     return tuple(int(v) for v in ImageStat.Stat(ring).median)
 
 def clean_plate(original, holes):
-    """holes are original-pixel boxes. Returns (plate image at original size, edit_ok)."""
-    W, H = original.size
-    s, (w, h), (pw, ph) = working_size(W, H)
-    work = Image.new('RGB', (pw, ph), ring_color(original, (0, 0, W, H), 0))
-    work.paste(original.resize((w, h)), (0, 0))
-    mask = Image.new('RGBA', (pw, ph), (0, 0, 0, 255))  # transparent = area to repaint
-    flat_mask = Image.new('L',(pw,ph),0)
-    flat_draw = ImageDraw.Draw(flat_mask)
-    draw, mdraw = ImageDraw.Draw(work), ImageDraw.Draw(mask)
-    for x0, y0, x1, y1 in holes:
-        box = (max(0, int(x0 * s) - PAD), max(0, int(y0 * s) - PAD), min(pw, int(x1 * s) + PAD), min(ph, int(y1 * s) + PAD))
-        # Pre-fill holes so text and brand-logo pixels never reach the image model.
-        patch = work.crop(box)
-        colors = patch.resize((64,64)).getcolors(4096) or []
-        count, dominant = max(colors,default=(0,(255,255,255)))
-        # Text on a flat card/button needs its original surface, not the photographic scene
-        # behind that card. Preserve this deterministic fill when inpainting changes the surface.
-        fill = dominant if count >= 4096*.45 else ring_color(work,box)
-        uniform = count >= 4096*.45 or solid(patch,fill,share=.6)
-        draw.rectangle(box, fill=fill)
-        if uniform: flat_draw.rectangle(box,fill=255)
-        mdraw.rectangle(box, fill=(0, 0, 0, 0))
-    edited, ok = work, True
-    with tempfile.TemporaryDirectory() as tmp:
-        work.save(Path(tmp) / 'work.png')
-        mask.save(Path(tmp) / 'mask.png')
-        try:
-            # ponytail: no mask_path; the edit model returns transparent holes when given one. The mask
-            # instead limits compositing below, so only hole pixels change. Pass mask_path if that gets fixed.
-            data = deepseek.retry(images.edit, Path(tmp) / 'work.png', PLATE_PROMPT)
-            import io
-            edited = Image.open(io.BytesIO(data)).convert('RGB').resize((pw, ph))
-        except Exception:
-            ok = False
-    # Protect the feathered edge too: model output just outside a flat fill can invent
-    # borders/shadows that would otherwise bleed back through the blurred composite mask.
-    edited.paste(work,mask=flat_mask.filter(ImageFilter.MaxFilter(25)))
-    holes_l = mask.getchannel('A').point(lambda a: 255 - a).crop((0, 0, w, h)).resize((W, H)).filter(ImageFilter.GaussianBlur(3))
-    plate = original.copy()
-    plate.paste(edited.crop((0, 0, w, h)).resize((W, H)), mask=holes_l)
-    return plate, ok
+    """Compatibility helper. Rich cleanup reports are used by run_decompose below."""
+    from .cleanup import clean
+    result=clean(original,[{'box':box} for box in holes])
+    return result.image,not result.findings
 
 # Matching
 
@@ -282,6 +249,7 @@ def safe_color(kit, hex_, crop):
 # Job
 
 def run_decompose(job_id, ws, sample):
+    started=time.perf_counter()
     kit = storage.get_brand_kit(ws)
     require_design_kit(kit)
     path = storage.asset_path(sample.id)
@@ -289,10 +257,11 @@ def run_decompose(job_id, ws, sample):
     W, H = original.size
     px = lambda b: (b[0] * W, b[1] * H, b[2] * W, b[3] * H)
     c.update_job(job_id, progress='Reading layers')
-    elements = read_elements(path)
+    from .analysis import analyze, residual_text
+    elements,ocr_lines,timings=analyze(sample,path,read_elements)
     ws_name = db.get('Workspace', ws).get('name', '')
     from .ocr import read_text, refine_elements
-    elements = refine_elements(elements,read_text(path),original,kit,ws_name)
+    elements = refine_elements(elements,ocr_lines,original,kit,ws_name)
     texts, logos, shapes, holes = [], [], [], []
     for e in elements:
         x0, y0, x1, y1 = px(e['box'])
@@ -311,9 +280,35 @@ def run_decompose(job_id, ws, sample):
     text_layers = text_geometry(texts, kit, W)
     holes += [box for _,box,_ in texts]  # erase source glyphs, not the potentially wider replacement textbox
     c.update_job(job_id, progress='Cleaning background')
-    plate, ok = clean_plate(original, holes)
-    plate_asset = c.save_png(ws, plate, f'clean plate {sample.caption}', {'sampleAssetId':sample.id})
-    c.update_job(job_id, progress='Assembling' + ('' if ok else ' (background edit failed, used flat fill)'))
+    from .cleanup import clean, REVISION
+    cleanup_key=hashlib.sha256(json.dumps([REVISION,timings['analysisKey'],holes]).encode()).hexdigest()
+    current=db.get('Asset',sample.id)
+    cached=current['meta'].get('cleanPlate',{})
+    cleanup_start=time.perf_counter()
+    try:
+        if cached.get('key')!=cleanup_key:raise KeyError('cache miss')
+        plate_asset=storage.get_asset(cached['assetId'])
+        plate=flat(storage.asset_path(plate_asset.id))
+        cleanup_report=plate_asset.meta['cleanup']
+        timings['cleanupCacheHit']=True
+    except (KeyError,OSError):
+        result=clean(original,[{'box':b} for b in holes])
+        mask_asset=c.save_png(ws,result.mask.convert('RGB'),'Cleanup mask',{'sampleAssetId':sample.id,'diagnostic':True})
+        cleanup_report={'methods':result.methods,'modelCalls':result.model_calls,'findings':result.findings,
+                        'maskAssetId':mask_asset.id,'ocrAvailable':bool(ocr_lines)}
+        plate=result.image
+        plate_asset=c.save_png(ws,plate,'Clean reference background',{'sampleAssetId':sample.id,'cleanup':cleanup_report})
+        if ocr_lines:
+            c.update_job(job_id,progress='Checking the clean background for remaining lettering')
+            cleanup_report['findings']+=residual_text(read_text(storage.asset_path(plate_asset.id)),elements)
+            body=db.get('Asset',plate_asset.id);body['meta']['cleanup']=cleanup_report
+            db.put('Asset',plate_asset.id,ws,body)
+        if not cleanup_report['findings']:
+            current['meta']['cleanPlate']={'key':cleanup_key,'assetId':plate_asset.id}
+            db.put('Asset',sample.id,ws,current)
+        timings['cleanupCacheHit']=False
+    timings['cleanupSeconds']=round(time.perf_counter()-cleanup_start,3)
+    c.update_job(job_id, progress='Assembling editable layers')
     layers = [box_layer('background', 0, 0, W, H) | {'type':'image', 'source':'generated', 'assetId':plate_asset.id, 'fit':'cover'}]
     centers = [(l['role'], l['x'] + l['w'] / 2, l['y'] + l['h'] / 2) for l in text_layers]
     holds = lambda b, role=None: any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] and role in (None, r) for r, cx, cy in centers)
@@ -342,6 +337,15 @@ def run_decompose(job_id, ws, sample):
     layers += text_layers
     design = {'id':'des_' + uuid4().hex, 'workspaceId':ws, 'name':f'Layers from {sample.filename}'[:80],
               'width':W, 'height':H, 'background':{'colorToken':c.nearest_color(kit, ImageStat.Stat(plate).mean)}, 'layers':layers}
+    design['provenance']={'referenceAssetId':sample.id,'cleanPlateAssetId':plate_asset.id}
+    findings=list(cleanup_report['findings'])
+    if not ocr_lines:
+        findings.append({'code':'OCR_UNAVAILABLE','severity':'warning','message':'Local text verification was unavailable. Check the clean background for remaining lettering.'})
+    timings['totalSeconds']=round(time.perf_counter()-started,3)
+    body=db.get('Asset',plate_asset.id);body['meta']['timings']=timings
+    db.put('Asset',plate_asset.id,ws,body)
+    design['quality']={'status':'needs_review' if findings else 'ready','checkedAt':datetime.now(timezone.utc).isoformat(),
+                       'checks':['background_cleanup']+(['residual_text'] if ocr_lines else []),'findings':findings}
     from app.brand.lint import lint_design
     issues = lint_design(design, kit)
     c.add_design(job_id, ws, design)

@@ -42,7 +42,7 @@ def edit(image_path, instruction, model=None, mask_path=None):
     model = model or os.getenv('IMAGE_MODEL_EDIT', 'gpt-image-2.5-sunburst')
     with ExitStack() as stack:
         args = {'image':stack.enter_context(path.open('rb')), 'model':model,
-                'prompt':image_prompt(instruction), 'n':1, 'output_format':'png'}
+                'prompt':image_prompt(instruction), 'n':1, 'output_format':'png', 'background':'opaque'}
         if mask_path:
             args['mask'] = stack.enter_context(Path(mask_path).open('rb'))
         return decode(client().images.edit(**args))
