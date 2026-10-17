@@ -47,7 +47,7 @@ export function LayersPanel() {
     <h3>Layers</h3>
     <ol className="use-layers">
       {[...design.layers].reverse().map((layer, i) => (
-        <li key={layer.id} draggable className={selection.includes(layer.id) ? 'selected' : ''}
+        <li key={layer.id} data-layer-id={layer.id} draggable className={selection.includes(layer.id) ? 'selected' : ''}
           onClick={() => select([layer.id])} onDragStart={() => setDragId(layer.id)} onDragOver={e => e.preventDefault()}
           onDrop={() => { if (dragId && dragId !== layer.id) apply([{ op: 'reorder_layer', layerId: dragId, index: top - i }]); setDragId(null); }}>
           <span className="use-layer-name">{layer.role} <small>{layer.type}</small></span>

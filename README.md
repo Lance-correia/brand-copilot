@@ -11,3 +11,5 @@ Run the API on `127.0.0.1:8000` and the web app on port 5173 using the commands 
 Validation and model-smoke results: [scripts/SMOKE_RESULTS.md](scripts/SMOKE_RESULTS.md).
 
 DeepSeek deployments can use separate credentials: set `DEEPSEEK_PRO_ENDPOINT`, `DEEPSEEK_PRO_API_KEY`, `DEEPSEEK_PRO_MODEL` and the corresponding `DEEPSEEK_FLASH_*` variables. The chat helper selects credentials using the configured model deployment name. Legacy `AZURE_DEEPSEEK_ENDPOINT` / `AZURE_DEEPSEEK_API_KEY` remain shared fallbacks. Set each endpoint to its OpenAI-compatible base URL.
+
+Run the single live browser demo after starting both apps with `USE_STUBS=0`: `npx playwright install chromium`, then `npm run test:e2e`. It creates a new workspace, calls the configured models, checks direct-edit isolation, and writes a PNG, screenshot and step timings under `test-results/`.
