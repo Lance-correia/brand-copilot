@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { ApiError, deleteAsset, extractBrandKit, getBrandKit, listAssets, saveBrandKit, uploadAsset } from '../api/client';
 import type { Asset, BrandKit } from '../types';
 import BrandKitForm, { AssetThumb } from './BrandKitForm';
+import FolderUpload from './FolderUpload';
 
 const ZONES: { kind: Asset['kind']; label: string; accept: string; hint: string }[] = [
   { kind: 'guideline', label: 'Guidelines', accept: 'application/pdf,.pdf', hint: 'PDF brand book' },
@@ -50,6 +51,11 @@ export default function BrandIdentity() {
     if (failed.length) throw new Error(`Upload failed — ${failed.join('; ')}`);
   });
 
+  const refresh = () => {
+    pollUntil.current = Date.now() + CAPTION_POLL_WINDOW_MS;
+    listAssets(ws).then(setAssets, e => setError(e.message));
+  };
+
   const remove = (asset: Asset) => run('delete', async () => {
     await deleteAsset(asset.id);
     setAssets(current => current.filter(a => a.id !== asset.id));
@@ -68,6 +74,8 @@ export default function BrandIdentity() {
     <h1>Brand identity</h1>
     <p className="muted">Upload guidelines, logos, fonts and approved images, then extract and confirm your brand kit.</p>
     {error && <p className="error" role="alert">{error}</p>}
+
+    <FolderUpload ws={ws} onUploaded={refresh} />
 
     <div className="zones">
       {ZONES.map(zone => <UploadZone key={zone.kind} {...zone} busy={busy === `upload-${zone.kind}`}
