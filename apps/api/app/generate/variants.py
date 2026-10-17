@@ -2,7 +2,7 @@
 import base64
 import json
 import mimetypes
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from uuid import uuid4
 from app.core import storage
 from app.core.validation import validate_contract
@@ -167,7 +167,7 @@ def generate_image(ws, kit, layer, prompt):
     data = deepseek.retry(images.generate, f'{kit.imageryStyle}. {prompt}', w, h)
     return storage.save_asset(ws, data, f'{c.slug(prompt)}.png', 'image', 'generated', {'prompt':prompt})
 
-def run_variants(job_id, ws, sample, brief, source_design=None, studio=False):
+def run_variants(job_id, ws, sample, brief, source_design=None, studio=False, on_design=None):
     kit = storage.get_brand_kit(ws)
     from app.brand.fonts import require_design_kit
     require_design_kit(kit)
@@ -212,21 +212,30 @@ def run_variants(job_id, ws, sample, brief, source_design=None, studio=False):
                 done[0] += 1
             progress()
     progress()
-    with ThreadPoolExecutor(max_workers=max(1, total)) as pool:
-        futures = [[(layer, pool.submit(one, layer, prompt)) for layer, prompt in pending] for _, pending in builds]
-        for option_index, ((design, _), (p, jobs)) in enumerate(zip(builds, zip(plans, futures))):
-            for layer, future in jobs:
-                asset = future.result()
-                if asset:
-                    layer.update(assetId=asset.id, source='generated')
-                else:  # keep the variant renderable: accent placeholder instead of the photo
-                    for key in ('fit', 'source', 'assetId'):
-                        layer.pop(key, None)
-                    layer.update(type='shape', shape='rect', fillToken=p['colors']['accent'], radius=0)
-            c.update_job(job_id, progress=f'Checking brand ({design["name"][:9]})')
-            design, _ = c.lint_fix(finish(design, kit, p['colors']['text']), kit)
-            if source_design and source_design.get('provenance'):design['provenance']=dict(source_design['provenance'])
-            elif sample:design['provenance']={'referenceAssetId':sample.id}
-            if studio: design.update(label=f'Option {chr(65+option_index)}',version=1)
-            c.add_design(job_id, ws, design)
+    remaining=[len(pending) for _,pending in builds]
+    def finalize(index):
+        design,_=builds[index]
+        p=plans[index]
+        c.update_job(job_id,progress=f'Checking Option {chr(65+index)}')
+        design,_=c.lint_fix(finish(design,kit,p['colors']['text']),kit)
+        if source_design and source_design.get('provenance'):design['provenance']=dict(source_design['provenance'])
+        elif sample:design['provenance']={'referenceAssetId':sample.id}
+        if studio:design.update(label=f'Option {chr(65+index)}',version=1)
+        if on_design:on_design(design)
+        else:c.add_design(job_id,ws,design)
+    with ThreadPoolExecutor(max_workers=min(4,max(1,total))) as pool:
+        futures={pool.submit(one,layer,prompt):(index,layer) for index,(_,pending) in enumerate(builds) for layer,prompt in pending}
+        for index,count in enumerate(remaining):
+            if count==0:finalize(index)
+        for future in as_completed(futures):
+            index,layer=futures[future]
+            asset=future.result()
+            if asset:layer.update(assetId=asset.id,source='generated')
+            else:
+                for key in ('fit','source','assetId'):layer.pop(key,None)
+                layer.update(type='shape',shape='rect',fillToken=plans[index]['colors']['accent'],radius=0)
+            remaining[index]-=1
+            if remaining[index]==0:finalize(index)
+    if not on_design:
+        with c.LOCK:c.JOBS[job_id]['designs'].sort(key=lambda d:d.get('label',d['name']))
     c.update_job(job_id, progress='Done' + (f' ({failed[0]} image(s) failed, placeholders used)' if failed[0] else ''))

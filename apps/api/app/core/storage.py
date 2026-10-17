@@ -93,7 +93,7 @@ def list_assets(ws_id, kind=None) -> list[Asset]:
 
 def get_brand_kit(ws_id) -> BrandKit:
     kit = BrandKit.model_validate(db.get('BrandKit', ws_id))
-    if kit.fonts:
+    if kit.fonts and not any(r.id=='FONT-FALLBACK' for r in kit.rules):
         return kit
     from app.brand.fonts import FONT_LOCK, ensure_fonts
     with FONT_LOCK:

@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from app.core import db, storage
 from . import ocr
 
-REVISION='reference-analysis-v1'
+REVISION='reference-analysis-v2'
 
 def analyze(sample,path,reader):
     key=REVISION+':'+hashlib.sha256(path.read_bytes()).hexdigest()

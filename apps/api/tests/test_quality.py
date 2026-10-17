@@ -95,3 +95,32 @@ def test_quality_flags_text_collisions_and_recomputes_after_fix():
     checked['layers'].pop()
     checked=assess(checked,storage.get_brand_kit('ws_lumen'))
     assert not any(f['code']=='TEXT_COLLISION' for f in checked['quality']['findings'])
+
+def test_ocr_anchors_an_unread_logo_to_its_wordmark():
+    from app.decompose.ocr import refine_elements
+    from app.core import storage
+    source=Image.new('RGB',(400,400),'white')
+    logo={'type':'logo','text':'','box':[.6,.65,.9,.8],'role':'logo'}
+    line={'text':'Lumen','confidence':1,'box':[.65,.82,.92,.9]}
+    result=refine_elements([logo],[line],source,storage.get_brand_kit('ws_lumen'),'Lumen')
+    assert result[0]['text']=='Lumen' and result[0]['box']==line['box'] and result[0]['localOcr']
+
+def test_headline_role_does_not_choose_body_by_weight_tie():
+    from app.decompose.pipeline import nearest_font
+    from app.core import storage
+    kit=storage.get_brand_kit('ws_lumen')
+    assert nearest_font(kit,{'serif':False,'weight':400},'headline').token=='headline'
+
+def test_photo_letter_mask_keeps_background_between_glyphs():
+    from app.decompose.cleanup import _photo_mask
+    photo=Image.new('RGB',(120,50),'#346070')
+    ImageDraw.Draw(photo).rectangle((20,10,25,40),fill='white')
+    mask=_photo_mask(photo,{'kind':'text','colorHex':'#FFFFFF'})
+    assert mask.getpixel((22,20))==255 and mask.getpixel((80,20))==0
+
+def test_empty_successful_ocr_is_distinct_from_unavailable(monkeypatch):
+    from app.decompose import ocr
+    monkeypatch.setattr(ocr,'_read_text',lambda path:[])
+    assert ocr.read_text_checked('unused')==([],True)
+    monkeypatch.setattr(ocr,'_read_text',lambda path:None)
+    assert ocr.read_text_checked('unused')==([],False)

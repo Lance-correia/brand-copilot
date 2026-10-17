@@ -75,7 +75,7 @@ class Session:
         self.allowed.add(design['id'])
         self.outputs[design.get('label') or design['id']] = design
         with c.LOCK:
-            c.JOBS[self.job_id]['designs'] = list(self.outputs.values())
+            c.JOBS[self.job_id]['designs'] = sorted(self.outputs.values(),key=lambda d:d.get('label',d['name']))
 
     def context(self):
         designs = [self.design(i) for i in sorted(self.allowed)]
@@ -92,8 +92,12 @@ class Session:
                         latest[d['label']] = d['id']
         return {'brandKit':self.kit.model_dump(mode='json', exclude_unset=True),
                 'assets':[{'id':a.id,'kind':a.kind,'source':a.source,'caption':a.caption,'filename':a.filename,'tags':a.tags}
-                          for a in storage.list_assets(self.ws)],
+                          for a in storage.list_assets(self.ws) if not a.meta.get('diagnostic')],
                 'messages':self.thread['messages'][-20:], 'designs':list(unique.values()), 'latestByLabel':latest,
+                'editableImageTargets':[{'designId':d['id'],'label':d.get('label',d['name']),'layerId':l['id'],
+                                         'role':l['role'],'assetId':l['assetId'],'canEditGeneratedImage':True}
+                                        for d in unique.values() for l in d['layers'] if l['type']=='image'
+                                        and l['source']=='generated' and owned_asset(self.ws,l['assetId']).source=='generated'],
                 'focusDesignIds':[self.aliases.get(i,i) for i in self.focus], 'attachmentAssetIds':self.attachments}
 
     def summary(self):
@@ -102,7 +106,7 @@ class Session:
                          for d in self.outputs.values())
 
     def outputs_id(self):
-        return [d['id'] for d in self.outputs.values()]
+        return [d['id'] for d in sorted(self.outputs.values(),key=lambda d:d.get('label',d['name']))]
 
     def apply(self, original, ops):
         working = original
@@ -143,7 +147,7 @@ class Session:
         self.sources[asset_id] = source['id']
         self.allowed.add(source['id'])
         with c.LOCK:
-            c.JOBS[self.job_id]['designs'] = list(self.outputs.values())
+            c.JOBS[self.job_id]['designs'] = sorted(self.outputs.values(),key=lambda d:d.get('label',d['name']))
         return source
 
     def options(self, args):
@@ -156,14 +160,17 @@ class Session:
         # Generation from an existing option uses its JSON to form a spec; no image export is sent to a model.
         sample = owned_asset(self.ws,sample_id) if sample_id else None
         self.step('Planning four options with your brand, message and layout')
-        before = len(c.JOBS[self.job_id]['designs'])
         if use_stubs():
             from app.core.fixtures import variant_designs
             designs = variant_designs(self.ws,4)
         else:
-            variants.run_variants(self.job_id, self.ws, sample, args.get('brief') or self.text,
-                                  source_design=source, studio=True)
-            designs = c.JOBS[self.job_id]['designs'][before:]
+            designs=[]
+            def ready(design):
+                designs.append(design);self.publish(design)
+                self.step(f"{design['label']} is ready to preview")
+            variants.run_variants(self.job_id,self.ws,sample,args.get('brief') or self.text,
+                                  source_design=source,studio=True,on_design=ready)
+            designs.sort(key=lambda d:d['label'])
         for i, design in enumerate(designs):
             design.update(label=f'Option {chr(65+i)}', version=1)
             self.publish(design)
@@ -244,16 +251,19 @@ class Session:
             source = self.split(self.attachments[0])
             self.options({'sourceDesignId':source['id'],'n':4})
             self.calls = 2
-            self.reply_text = 'Created Options A–D from your reference, with editable text, brand colors, fonts and imagery.'
-            request_text = 'The reference has already been split and Options A–D have been generated in this turn. Use reply to describe each in one short sentence, under 500 characters total, plain text. Do not generate or edit anything else.'
+            self.reply_text = '\n'.join(f"{d['label']}: {self.changes[d['label']][0]}." for d in sorted(self.outputs.values(),key=lambda d:d['label']))
+            self.step('Four options checked and saved')
+            return  # The planner already supplied each art direction; no extra model turn is needed.
         if use_stubs():
             self.reply_text = self.reply_text or 'Studio is in stub mode. Attach a reference to create four editable options.'
             return
         context = self.context()
         messages = [{'role':'system','content':SYSTEM}, {'role':'user','content':json.dumps(context)+'\n\nRequest: '+request_text}]
         attached = [storage.asset_path(i) for i in self.attachments]
+        recovery_used=False
+        edit_requested=bool(re.match(r'\s*(?:please\s+)?(?:change|edit|replace|swap|make|remove|add|move|update|set|rewrite)\b',self.text,re.I))
         for turn in range(MAX_STEPS):
-            self.step(f'Considering the next change ({turn+1}/{MAX_STEPS})')
+            self.step('Planning the requested changes' if turn==0 else 'Applying and checking the changes')
             response = deepseek.retry(deepseek.chat, deepseek.flash(),messages,tools=TOOLS,images=attached or None).choices[0].message
             # The wrapper adds vision to the last user message without mutating messages.
             if attached:
@@ -263,6 +273,14 @@ class Session:
             calls = response.tool_calls or []
             messages.append(response.model_dump(exclude_none=True))
             if not calls:
+                if edit_requested and not self.outputs and not recovery_used and not self.sources and self.allowed:
+                    recovery_used=True
+                    messages.append({'role':'user','content':'No design has changed yet. Complete the requested edit with tools before replying. '
+                        'editableImageTargets in the context are verified against storage: canEditGeneratedImage=true means the '
+                        'edit_generated_image tool IS allowed for that exact designId/layerId. Generated images are editable; '
+                        'brand_asset images are protected. Do not search the library for a requested new scene on a generated image. '
+                        'If there is an actual tool failure, explain that failure accurately.'})
+                    continue
                 self.reply_text = (response.content or '').strip() or self.reply_text
                 break
             for call in calls:

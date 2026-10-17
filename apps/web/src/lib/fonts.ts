@@ -8,7 +8,7 @@ export const fontFamily = (font: FontToken) => `brand_${font.assetId}_${font.wei
 /** Asset-specific font families prevent another workspace's font from replacing this one. */
 export async function loadBrandFonts(kit: BrandKit): Promise<void> {
   await Promise.all(kit.fonts.map(font => {
-    const key = `${font.token}:${font.assetId}`;
+    const key = fontFamily(font);
     if (!loaded.has(key)) {
       const family = fontFamily(font);
       const face = new FontFace(family, `url(/api/files/${encodeURIComponent(font.assetId)})`, { weight: String(font.weight) });

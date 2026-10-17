@@ -13,6 +13,11 @@ import './studio.css';
 type Pending = { threadId: string; jobId?: string; text: string; attachmentIds: string[]; job?: Job };
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 const clearCanvas = () => useCanvasStore.setState({ design: null, selection: [], proposal: null, past: [], future: [] });
+// Stable references keep polling from re-rendering thumbnails and re-running lint for unchanged options.
+function mergeDesigns(current: Record<string, Design>, incoming: Design[]) {
+  const changed = incoming.filter(d => JSON.stringify(current[d.id]) !== JSON.stringify(d));
+  return changed.length ? { ...current, ...Object.fromEntries(changed.map(d => [d.id, d])) } : current;
+}
 
 export default function StudioScreen() {
   const ws = useParams().id!;
@@ -95,13 +100,13 @@ export default function StudioScreen() {
         const job = await api.getJob(current.jobId!);
         if (stopped) return;
         setPending(p => p && p.jobId === current.jobId ? { ...p, job } : p);
-        if (job.designs.length) setDesigns(all => ({ ...all, ...Object.fromEntries(job.designs.map(d => [d.id, d])) }));
+        if (job.designs.length) setDesigns(all => mergeDesigns(all, job.designs));
         if (job.status === 'done' || job.status === 'error') {
           const next = await api.getThread(current.threadId);
           const [chats, refreshedAssets] = await Promise.all([api.listThreads(ws), api.listAssets(ws)]);
           setAssets(refreshedAssets);
           if (stopped) return;
-          setThreads(chats); setDesigns(all => ({ ...all, ...Object.fromEntries(job.designs.map(d => [d.id, d])) }));
+          setThreads(chats); setDesigns(all => mergeDesigns(all, job.designs));
           if (selected.current === current.threadId) {
             setThread(next);
             if (job.designs.length) {

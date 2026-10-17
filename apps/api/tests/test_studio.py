@@ -93,6 +93,28 @@ def test_context_reads_direct_edits_and_focus(studio):
     assert context['focusDesignIds']==[d['id']]
     assert 'Direct preview correction' in str(context['designs'])
 
+def test_image_edit_allow_list_uses_stored_source(studio):
+    s=session(studio);design=studio[3]
+    target=next(l for l in design['layers'] if l['type']=='image')
+    generated=storage.save_asset(s.ws,storage.asset_path(target['assetId']).read_bytes(),'review-generated.png','image','generated')
+    target.update(assetId=generated.id,source='generated');db.put('Design',design['id'],s.ws,design)
+    allowed=s.context()['editableImageTargets']
+    assert any(t['layerId']==target['id'] and t['canEditGeneratedImage'] for t in allowed)
+    assert all(storage.get_asset(t['assetId']).source=='generated' for t in allowed)
+
+def test_one_recovery_turn_after_unperformed_edit(studio,monkeypatch):
+    monkeypatch.setenv('USE_STUBS','0');s=session(studio)
+    head=next(l for l in studio[3]['layers'] if l['role']=='headline')
+    replies=iter([
+        SimpleNamespace(choices=[SimpleNamespace(message=ChatCompletionMessage(role='assistant',content='I cannot edit this.'))]),
+        tool_message('update_layer',{'designId':studio[3]['id'],'layerId':head['id'],'props':{'text':'Recovered edit'}}),
+        tool_message('reply',{'text':'Updated B.'}),
+    ])
+    monkeypatch.setattr(agent.deepseek,'chat',lambda *a,**k:next(replies))
+    s.loop()
+    assert len(s.outputs_id())==1
+    assert any(l.get('text')=='Recovered edit' for l in next(iter(s.outputs.values()))['layers'])
+
 def test_thread_persistence_and_bare_attachment(studio):
     ws,client,thread,design=studio
     sample=storage.list_assets(ws,'sample')[0]

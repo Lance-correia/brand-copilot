@@ -113,6 +113,17 @@ def list_designs(ws: str):
     db.get('Workspace', ws)
     return db.list_records('Design', ws)
 
+def checked_design(design):
+    from app.core.quality import assess
+    body=design.model_dump(mode='json',exclude_unset=True)
+    for asset_id in body.get('provenance',{}).values():
+        if storage.get_asset(asset_id).workspaceId!=design.workspaceId:
+            raise HTTPException(422,'Comparison asset belongs to another workspace')
+    try: kit=storage.get_brand_kit(design.workspaceId)
+    except KeyError: kit=None  # Designs can be saved before a kit has been extracted.
+    if kit:body=assess(body,kit)
+    return validate_contract('Design',body)
+
 @router.post('/workspaces/{ws}/designs', response_model=Design, status_code=201, response_model_exclude_unset=True)
 def create_design(ws: str, design: Design):
     db.get('Workspace', ws)
@@ -123,8 +134,9 @@ def create_design(ws: str, design: Design):
             raise HTTPException(409, 'Design id belongs to another workspace')
     except KeyError:
         pass
-    db.put('Design', design.id, ws, validate_contract('Design', design))
-    return design
+    checked=checked_design(design)
+    db.put('Design',design.id,ws,checked)
+    return checked
 
 @router.get('/designs/{id}', response_model=Design, response_model_exclude_unset=True)
 def get_design(id: str):
@@ -135,11 +147,6 @@ def save_design(id: str, design: Design):
     previous = db.get('Design', id)
     if id != design.id or previous['workspaceId'] != design.workspaceId:
         raise HTTPException(422, 'Design identity mismatch')
-    from app.core.quality import assess
-    checked=design.model_dump(mode='json',exclude_unset=True)
-    try: kit=storage.get_brand_kit(design.workspaceId)
-    except KeyError: kit=None  # Designs can be saved before a brand kit has been extracted.
-    if kit: checked=assess(checked,kit)
-    checked=validate_contract('Design',checked)
+    checked=checked_design(design)
     db.put('Design',id,design.workspaceId,checked)
     return checked

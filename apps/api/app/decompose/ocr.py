@@ -13,9 +13,9 @@ from app.generate import common as c
 log = logging.getLogger(__name__)
 LOCK = Lock()
 
-def read_text(path):
+def _read_text(path):
     if sys.platform != 'darwin' or not shutil.which('xcrun'):
-        return []
+        return None
     source = Path(__file__).with_suffix('.swift')
     folder = DATA_DIR / 'tools'
     binary = folder / 'studio-ocr'
@@ -29,7 +29,15 @@ def read_text(path):
         return json.loads(result.stdout)
     except (OSError,subprocess.SubprocessError,ValueError):
         log.warning('Local OCR unavailable; using vision model geometry')
-        return []
+        return None
+
+def read_text(path):
+    return _read_text(path) or []
+
+def read_text_checked(path):
+    """Distinguish an empty, successful scan from an unavailable OCR service."""
+    lines=_read_text(path)
+    return lines or [],lines is not None
 
 def refine_elements(elements, lines, image, kit, ws_name):
     if not lines: return elements
@@ -37,6 +45,12 @@ def refine_elements(elements, lines, image, kit, ws_name):
     brand = norm(ws_name.split()[0]) if ws_name else ''
     used, refined = set(), []
     for e in elements:
+        if e['type']=='logo' and not e['text'].strip() and brand:
+            candidates=[line for line in lines if norm(line['text'])==brand and line['confidence']>=.65]
+            if candidates:
+                b=e['box'];cx,cy=(b[0]+b[2])/2,(b[1]+b[3])/2
+                line=min(candidates,key=lambda line:abs((line['box'][0]+line['box'][2])/2-cx)+abs((line['box'][1]+line['box'][3])/2-cy))
+                e={**e,'text':line['text'],'box':line['box'],'localOcr':True}
         word = norm(e['text'])
         if e['type'] not in ('text','logo') or not word:
             refined.append(e); continue

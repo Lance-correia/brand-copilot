@@ -36,6 +36,8 @@ def read_elements(path):
         'type: text (each separate text block; keep its exact words, use \\n for line breaks), logo (brand mark or wordmark; '
         'put any wordmark letters in text), shape (solid buttons, panels, badges) or photo. '
         'box: [x0, y0, x1, y1] as fractions of the image width and height, tight around the element. '
+        'Leave text inside photographed devices, product screenshots, packaging and signs inside their photo; '
+        'only advertising copy and separately placed logos become editable text/logo elements. '
         'colorHex: the text or fill color as #RRGGBB. fontStyle describes text; use serif=false, weight=400 otherwise. '
         'role: headline, subhead, body, cta (button label), cta_bg (button shape), logo, hero, decoration or background. '
         'List each button twice: its shape (role cta_bg) and its label text (role cta).'),
@@ -179,8 +181,12 @@ def text_geometry(texts, kit, W):
     for e,(x0,y0,x1,y1),crop in texts:
         role=e['role'] if e['role'] in ('headline','subhead','body','cta') else 'body'
         font=nearest_font(kit,e['fontStyle'],role)
+        # Brand size ranges target a 1080px canvas. Measure small source images at their
+        # native scale, then scale the editable scene graph up after reconstruction.
+        source_scale=min(1,W/1080)
+        font=font.model_copy(update={'minSize':font.minSize*source_scale,'maxSize':font.maxSize*source_scale})
         text=e['text'].strip()
-        width=min(W-x0,max(1,x1-x0))
+        width=min(W-x0,max(1,x1-x0)+2)
         # OCR detects ink height, not a full text line. Give the baseline/descenders room.
         height=max(y1-y0,(y1-y0)*1.45)
         preferred=min(font.maxSize,max(font.minSize,(y1-y0)/max(1,text.count('\n')+1)*1.25))
@@ -198,6 +204,7 @@ def text_geometry(texts, kit, W):
                 width=min(W-x0,max(width,desired))
                 _,height_needed=metrics(text,path,size,width,weight=font.weight)
                 height=max(height,height_needed)
+            height=height_needed+1
         layers.append(box_layer(role,max(0,x0),y0,min(W,x0+width),y0+height)|{
             'type':'text','text':text,'fontToken':font.token,'fontSize':size,'fontWeight':font.weight,
             'lineHeight':1.2,'colorToken':safe_color(kit,e['colorHex'],crop),'align':e['align']})
@@ -244,6 +251,9 @@ def iou(a, b):
 
 def nearest_font(kit, style, role=None):
     require_design_kit(kit)
+    if role=='headline':
+        headline=next((f for f in kit.fonts if f.token=='headline'),None)
+        if headline:return headline
     if role and role != 'headline':
         body = next((f for f in kit.fonts if f.token=='body'),None)
         if body: return body
@@ -270,7 +280,7 @@ def run_decompose(job_id, ws, sample):
     from .analysis import analyze, residual_text
     elements,ocr_lines,timings=analyze(sample,path,read_elements)
     ws_name = db.get('Workspace', ws).get('name', '')
-    from .ocr import read_text, refine_elements
+    from .ocr import read_text_checked, refine_elements
     elements = refine_elements(elements,ocr_lines,original,kit,ws_name)
     texts, logos, shapes, holes = [], [], [], []
     for e in elements:
@@ -302,18 +312,24 @@ def run_decompose(job_id, ws, sample):
         cleanup_report=plate_asset.meta['cleanup']
         timings['cleanupCacheHit']=True
     except (KeyError,OSError):
-        result=clean(original,[{'box':b} for b in holes])
+        regions=[{'box':b,'kind':'logo'} for b,_ in logos]+[
+            {'box':b,'kind':'text','colorHex':e['colorHex']} for e,b,_ in texts]
+        result=clean(original,regions)
         mask_asset=c.save_png(ws,result.mask.convert('RGB'),'Cleanup mask',{'sampleAssetId':sample.id,'diagnostic':True})
         cleanup_report={'methods':result.methods,'modelCalls':result.model_calls,'findings':result.findings,
-                        'maskAssetId':mask_asset.id,'ocrAvailable':bool(ocr_lines)}
+                        'maskAssetId':mask_asset.id,'ocrAvailable':False}
         plate=result.image
         plate_asset=c.save_png(ws,plate,'Clean reference background',{'sampleAssetId':sample.id,'cleanup':cleanup_report})
         if ocr_lines:
             c.update_job(job_id,progress='Checking the clean background for remaining lettering')
-            cleanup_report['findings']+=residual_text(read_text(storage.asset_path(plate_asset.id)),elements)
+            remaining,verified=read_text_checked(storage.asset_path(plate_asset.id))
+            cleanup_report['ocrAvailable']=verified
+            if verified:cleanup_report['findings']+=residual_text(remaining,elements)
+            else:cleanup_report['findings'].append({'code':'OCR_UNAVAILABLE','severity':'warning',
+                'message':'The clean background could not be scanned for remaining lettering. Please review it.'})
             body=db.get('Asset',plate_asset.id);body['meta']['cleanup']=cleanup_report
             db.put('Asset',plate_asset.id,ws,body)
-        if not cleanup_report['findings']:
+        if not cleanup_report['findings'] and cleanup_report['ocrAvailable']:
             current['meta']['cleanPlate']={'key':cleanup_key,'assetId':plate_asset.id}
             db.put('Asset',sample.id,ws,current)
         timings['cleanupCacheHit']=False
@@ -332,8 +348,7 @@ def run_decompose(job_id, ws, sample):
             role = 'cta_bg' if holds(b, 'cta') or e['role'] == 'cta_bg' else 'decoration'
             layers.append(box_layer(role, *b) | {'type':'shape', 'shape':'rect',
                           'fillToken':c.nearest_color(kit, fill), 'radius':corner_radius(crop, fill)})
-    for l in text_layers:
-        b = (l['x'], l['y'], l['x'] + l['w'], l['y'] + l['h'])
+    for l,(_,b,_) in zip(text_layers,texts):
         if l['role'] == 'cta' and not holds_any(kept, b):
             button = find_button(original, b)
             if button:
@@ -345,8 +360,18 @@ def run_decompose(job_id, ws, sample):
         logo = c.logo_for(kit, c.mean_rgb(storage.asset_path(plate_asset.id), [x0 / W, y0 / H, x1 / W, y1 / H])) or logo
         layers.append(box_layer('logo', x0, y0, x1, y1) | {'type':'image', 'source':'brand_asset', 'assetId':logo.assetId, 'fit':'contain'})
     layers += text_layers
+    canvas_scale=max(1,1080/W)
+    if canvas_scale!=1:
+        for layer in layers:
+            for key in ('x','y','w','h','fontSize','radius'):
+                if key in layer:layer[key]=round(layer[key]*canvas_scale,2)
+    from app.core.typography import fit_size
+    for layer in layers:
+        if layer['type']=='text':
+            font=next(f for f in kit.fonts if f.token==layer['fontToken'])
+            layer['fontSize']=fit_size(layer['text'],layer['w'],layer['h'],font,max_size=layer['fontSize'])
     design = {'id':'des_' + uuid4().hex, 'workspaceId':ws, 'name':f'Layers from {sample.filename}'[:80],
-              'width':W, 'height':H, 'background':{'colorToken':c.nearest_color(kit, ImageStat.Stat(plate).mean)}, 'layers':layers}
+              'width':round(W*canvas_scale), 'height':round(H*canvas_scale), 'background':{'colorToken':c.nearest_color(kit, ImageStat.Stat(plate).mean)}, 'layers':layers}
     design['provenance']={'referenceAssetId':sample.id,'cleanPlateAssetId':plate_asset.id}
     findings=list(cleanup_report['findings'])
     if not ocr_lines:

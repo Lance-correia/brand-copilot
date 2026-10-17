@@ -22,6 +22,11 @@ def ensure_fonts(kit: BrandKit) -> BrandKit:
     """Prefer uploaded font files. If there are none, install one bundled OFL font idempotently."""
     if kit.fonts:
         fallback = any(storage.get_asset(f.assetId).meta.get('fallback') for f in kit.fonts)
+        if fallback and not any(f.token=='headline' for f in kit.fonts):
+            # A legacy/fontless extraction may retain only the fallback's body role.
+            # Complete that app-provided fallback without changing uploaded font rules.
+            base=next(f for f in kit.fonts if storage.get_asset(f.assetId).meta.get('fallback'))
+            kit=kit.model_copy(update={'fonts':[base.model_copy(update={'token':'headline','weight':700,'minSize':32,'maxSize':120}),*kit.fonts]})
         return _notice(kit, fallback)
     with FONT_LOCK:
         assets = storage.list_assets(kit.workspaceId, 'font')

@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageStat
 from app.llm import images
 
-REVISION = 'surface-mask-v1'
+REVISION = 'surface-mask-v3'
 PROMPT = ('Restore the underlying background in the masked areas. Continue the surrounding '
           'surface, texture, lighting and edges naturally. Keep the composition unchanged. '
           'Return a fully opaque image with no holes, frames, panels or new objects. '
@@ -60,6 +60,20 @@ def _ink_mask(crop, predicted):
     distance=ImageChops.lighter(ImageChops.lighter(channels[0],channels[1]),channels[2])
     return distance.point(lambda v:255 if v>22 else 0).filter(ImageFilter.MaxFilter(3))
 
+def _photo_mask(crop,region):
+    """Follow confidently colored lettering; uncertain colors and logos use the bounded ROI."""
+    color=region.get('colorHex','')
+    if region.get('kind')=='text' and len(color)==7 and color.startswith('#'):
+        try:
+            foreground=Image.new('RGB',crop.size,color)
+            channels=ImageChops.difference(crop,foreground).split()
+            distance=ImageChops.lighter(ImageChops.lighter(channels[0],channels[1]),channels[2])
+            mask=distance.point(lambda v:255 if v<64 else 0)
+            share=ImageStat.Stat(mask).mean[0]/255
+            if .01<share<.4:return mask.filter(ImageFilter.MaxFilter(5))
+        except ValueError:pass
+    return Image.new('L',crop.size,255)
+
 def _box(region,W,H,pad=5):
     x0,y0,x1,y1=region['box']
     return (max(0,math.floor(x0)-pad),max(0,math.floor(y0)-pad),
@@ -85,8 +99,8 @@ def clean(original, regions, edit=None):
             flat_mask.paste(ImageChops.lighter(flat_mask.crop(box),local),box[:2])
             methods.add('local_surface')
         else:
-            # Text on texture needs context; preserve all pixels outside its padded ROI.
-            ImageDraw.Draw(photo_mask).rectangle((box[0],box[1],box[2]-1,box[3]-1),fill=255)
+            local=_photo_mask(original.crop(box),region)
+            photo_mask.paste(ImageChops.lighter(photo_mask.crop(box),local),box[:2])
             methods.add('masked_inpaint')
     mask=ImageChops.lighter(flat_mask,photo_mask)
     if not photo_mask.getbbox():return CleanupResult(plate,mask,sorted(methods),0,[])
