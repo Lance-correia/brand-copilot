@@ -5,7 +5,10 @@ import { loadBrandFonts } from '../lib/fonts';
 /** Fabric object -> layer id, for both the editor and offscreen renders. */
 export const layerIds = new WeakMap<FabricObject, string>();
 
-export const colorHex = (kit: BrandKit, token: string) => kit.colors.find(c => c.token === token)?.hex ?? '#FF00FF';
+/** Matches lint's assumption for text layers without lineHeight (Fabric's own default is 1.16). */
+const DEFAULT_LINE_HEIGHT = 1.2;
+
+export const colorHex =(kit: BrandKit, token: string) => kit.colors.find(c => c.token === token)?.hex ?? '#FF00FF';
 
 const images = new Map<string, Promise<HTMLImageElement>>();
 export function loadImage(assetId: string): Promise<HTMLImageElement> {
@@ -65,7 +68,7 @@ export async function createLayerObject(layer: Layer, kit: BrandKit): Promise<Fa
     const font = kit.fonts.find(f => f.token === layer.fontToken);
     const box = new BoxText(layer.text, { ...base, fontFamily: layer.fontToken, fontSize: layer.fontSize,
       fontWeight: layer.fontWeight ?? font?.weight ?? 400, fill: colorHex(kit, layer.colorToken), textAlign: layer.align,
-      ...(layer.lineHeight ? { lineHeight: layer.lineHeight } : {}) });
+      lineHeight: layer.lineHeight ?? DEFAULT_LINE_HEIGHT });
     box.boxHeight = layer.h;
     box.middle = layer.role === 'cta'; // ponytail: CTA labels center in their pill; add a valign prop if other roles need it
     box.initDimensions();
