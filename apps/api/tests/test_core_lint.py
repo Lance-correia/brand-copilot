@@ -30,6 +30,8 @@ def apply(design, ops):
         validate_contract('EditOp', op)
         if op['op'] == 'update_layer':
             next(l for l in design['layers'] if l['id'] == op['layerId']).update(op['props'])
+        elif op['op'] == 'add_layer':
+            design['layers'].insert(op.get('index', len(design['layers'])), op['layer'])
         elif op['op'] == 'set_background':
             design['background'] = op['background']
     return validate_contract('Design', design)
@@ -85,12 +87,60 @@ def test_individual_rules(seeded):
     fix_clears(long, kit, 'TEXT-01')
 
     crowded = deepcopy(base)
-    layer(crowded, 'logo').update(x=380, y=930)  # within half a logo height of the CTA pill
-    assert rule_ids(crowded, kit) == ['CLEAR-01']
+    layer(crowded, 'logo').update(x=410, y=930)  # 18px right of the CTA pill; clear space is 20px
+    [violation] = lint_design(crowded, kit)
+    assert (violation.ruleId, violation.severity, violation.layerId, violation.fix) == ('CLEAR-01', 'warning', 'lay_3', [])
+    assert 'lay_3' in violation.message and 'lay_4' in violation.message
 
     background = deepcopy(base)
     background['background'] = {'colorToken': 'neon'}
     fix_clears(background, kit, 'COL-01')
+
+def image_design(design, asset_id, fit, text_box, color='ink', size=20):
+    design = deepcopy(design)
+    hero = {**layer(design, 'hero'), 'assetId': asset_id, 'fit': fit, 'x': 0, 'y': 0, 'w': 1080, 'h': 1080}
+    x, y, w, h = text_box
+    text = {**layer(design, 'headline'), 'text': 'Hi', 'fontToken': 'body', 'fontSize': size, 'colorToken': color, 'x': x, 'y': y, 'w': w, 'h': h}
+    design['layers'] = [hero, text]
+    return design
+
+def png(make):
+    import io
+    from PIL import Image, ImageDraw
+    image = Image.new('RGB', (200, 100), 'white')
+    make(ImageDraw.Draw(image))
+    buffer = io.BytesIO()
+    image.save(buffer, 'PNG')
+    return buffer.getvalue()
+
+def test_contrast_samples_image_under_text(seeded):
+    kit, designs = seeded
+    base = designs['Mornings, slowed down']
+    # 200x100 image, left quarter black. Cover on a square canvas crops the sides, so the black never shows.
+    split = storage.save_asset(WS, png(lambda d: d.rectangle((0, 0, 49, 99), fill='black')), 'split.png', 'image', 'generated').id
+    left = (80, 400, 170, 50)
+    assert rule_ids(image_design(base, split, 'cover', left), kit) == []
+    # Contain letterboxes it to canvas y 270-810, with the black in canvas x 0-270.
+    over_black = image_design(base, split, 'contain', left)
+    assert rule_ids(over_black, kit) == ['CON-01']
+    [violation] = lint_design(over_black, kit)
+    assert [op.model_dump(exclude_unset=True) for op in violation.fix] == [
+        {'op': 'update_layer', 'layerId': 'lay_2', 'props': {'colorToken': 'paper'}}]
+    fix_clears(over_black, kit, 'CON-01')
+    # Above the letterbox the text sits on the paper background, which ink passes.
+    assert rule_ids(image_design(base, split, 'contain', (80, 100, 170, 50)), kit) == []
+
+def test_contrast_over_mid_tone_image_adds_plate(seeded):
+    kit, designs = seeded
+    gray = storage.save_asset(WS, png(lambda d: d.rectangle((0, 0, 199, 99), fill='#7F7F7F')), 'gray.png', 'image', 'generated').id
+    for color in ('ink', 'paper'):  # neither ink nor paper reaches 4.5:1 on mid gray
+        design = image_design(designs['Mornings, slowed down'], gray, 'cover', (300, 500, 200, 50), color)
+        [violation] = lint_design(design, kit)
+        assert violation.ruleId == 'CON-01' and violation.fix[0].op == 'add_layer'
+        plate = violation.fix[0].layer
+        assert (plate.role, plate.fillToken, violation.fix[0].index) == ('cta_bg', 'paper', 1)
+        fixed = apply(design, [op.model_dump(mode='json', exclude_unset=True) for op in violation.fix])
+        assert lint_design(fixed, kit) == [], color
 
 def test_twenty_layers_fast_and_offline(seeded, monkeypatch):
     kit, designs = seeded
