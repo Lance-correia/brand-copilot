@@ -23,7 +23,7 @@ fixtures/                  sample brand, samples, designs, templates  (Prompt 0)
 data/                      runtime SQLite + files (gitignored)
 Run and environment
 • API: cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-• Web: cd apps/web && npm run dev (port 5173; Vite proxies /api to port 8000)
+• Web: npm run dev (http://127.0.0.1:5173; Vite proxies /api to 127.0.0.1:8000)
 • Storage: SQLite at data/app.db; files at data/files/{workspaceId}/{assetId}.{ext}
 • Single user, no login.
 .env at the repo root:

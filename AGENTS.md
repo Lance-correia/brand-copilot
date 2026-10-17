@@ -17,9 +17,9 @@ python scripts/seed.py
 
 API: `cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`
 
-Web: `cd apps/web && npm run dev` (port 5173, /api proxies to port 8000).
+Web: `npm run dev` from the root, then open `http://127.0.0.1:5173` (/api proxies to port 8000).
 
-Validation: `npm run typecheck`; `bash scripts/smoke_stub.sh`; `python scripts/smoke_models.py` (real credentials required, ignores USE_STUBS).
+Validation: `npm run typecheck`; `bash scripts/smoke_stub.sh`; `python scripts/smoke_models.py` (real credentials required, ignores USE_STUBS); `npm run test:e2e` (Studio acceptance, real models).
 
 `DATA_DIR` is resolved relative to the repository root, regardless of working directory. Default: SQLite `data/app.db`, assets `data/files/{workspaceId}/{assetId}.{ext}`. Stub startup seeds `ws_lumen` automatically. Seeding is idempotent.
 
@@ -43,4 +43,4 @@ Validation: `npm run typecheck`; `bash scripts/smoke_stub.sh`; `python scripts/s
 - Every image prompt ends with `No text, letters, logos or watermarks.`
 - Validate every design and op against JSON Schema before saving or applying. Backend: `app.core.validation.validate_contract`. Frontend: `src/use/validation.ts`. Validate the resulting design after applying ops.
 - Keep helper signatures in CONTRACTS.md unchanged. Python models are exported from `app.schema`; `Layer` and `EditOp` are union aliases, with `LAYER_ADAPTER` and `EDIT_OP_ADAPTER` for standalone Pydantic validation. TypeScript imports use `src/types`.
-- Phase 0 intentionally leaves feature logic and styling to owners. AI routes return explicit 501 responses with `USE_STUBS=0` until their owners implement them. Stub jobs grow by one design per poll; decomposition produces one design.
+- Studio uses persistent threads and a bounded Flash tool loop. A bare reference produces four editable options; agent changes create versions and direct preview text edits save to the current design. Completed conversations persist; active jobs are in memory.

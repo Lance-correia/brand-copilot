@@ -1,3 +1,56 @@
+# Chat-first Studio validation — 2026-10-17
+
+Implemented on `main`, committed in working steps, without pushing. The live frontend is at `http://127.0.0.1:5173`, proxying the real-mode API at `127.0.0.1:8000`. Opened the completed Studio conversation in the user's default browser. A separate Docker preview occupies localhost/IPv6 port 5173; the explicit IPv4 URL reaches this checkout.
+
+## Implemented
+
+- Thread and Message JSON Schemas, optional design labels/versions/parents and job reply/steps; regenerated all twelve contracts.
+- Four thread/message endpoints, persistent completed message pairs, per-thread job exclusion and growing job progress/steps.
+- `app/studio/` bounded Flash vision/tool loop (at most 15 model rounds and 15 executed tools), with the brand kit, asset catalogue, last twenty messages and current focused/mentioned scene graphs.
+- Default attachment flow through the shared decomposition pipeline and the existing Pro planner/builder, preserving reference copy and layout ideas and producing Options A–D. Option A receives a generated photo so it can be edited without passing brand pixels to an image model.
+- Versioned text, style, layout, image replacement/placement and generated-image edits. Multiple tool operations on an option in one turn produce a single new version. Ops and final designs are schema-validated; deterministic lint repair runs at most twice per edit. Named labels resolve to the newest version even when browsing an older version.
+- Brand-asset replacement uses actual stored source and workspace ownership; image editing checks both the layer source and stored asset source before calling the image model.
+- Studio thread list, attachment button/drop/paste, live step list, option cards, multi-focus chips, version selectors, lint badges, full editor links, PNG downloads, quick double-click text editing, and a searchable brand-library drawer. Layers/properties are hidden behind Advanced and are read-only there; the separate full editor retains direct editing.
+- `/use` redirects to `/studio`, confirmation lands in Studio, and the old StartModal/VariantsGrid/CopilotPanel flow is unmounted. Quick preview text edits save to the same design and flush before the next chat request.
+- Replies are plain text and short, with a summary from completed operations when the model produces an overlong answer.
+
+## Validation
+
+- API import: PASS.
+- `npm run build` including `tsc --noEmit`: PASS.
+- pytest: **39 passed, 2 skipped** (the existing optional live module/caption checks require separate opt-in).
+- `npm run test:e2e`: **1 passed**, headless Chromium, real configured providers, no mocked API responses or injected canvas state. Final run took approximately 140 seconds. Earlier complete real run also passed before the reply/lookup refinements.
+- Every option and every returned v2 in the final completed thread had **zero deterministic lint errors** (checked after the run).
+
+The single browser script is `e2e/demo.spec.ts`. It covers every requested acceptance item and additionally checks earlier-version preservation, version-chip switching, short replies, the library drawer, PNG download and the legacy route redirect.
+
+| Final live step | Measured wall time |
+| --- | --- |
+| Brand folder, extract, confirm, land in Studio | 5.854 s |
+| Attach without text, live steps, four editable options | 65.709 s |
+| B v2: headline and navy background, no image call | 5.070 s |
+| C v2: replace photo with tagged product UI asset | 8.569 s |
+| A v2: edit generated background, preserve brand pixels | 48.003 s |
+| Focus D, double-click correction, zero model routes | 0.546 s |
+| Next chat sees the direct correction | 3.616 s |
+| Persistence, library drawer, PNG and legacy redirect | 1.487 s |
+
+Four-option timing includes sample upload/analysis, decomposition/inpainting, Pro planning, image generation, lint and the assistant reply. Typical text/background edit: **5.1 s**; library swap: **8.6 s**. Image editing remains the slowest edit (**48.0 s** in the final run).
+
+B returned one B v2 with both the exact requested headline and navy background, preserved B v1, and produced no generated assets or image-edit steps. C returned C v2 with a different library asset tagged `product-ui`, without generating an image. A returned A v2 with a new generated asset whose parent is also generated; the brand logo remained unchanged and direct brand-image editing returned 403. D's double-click fix made zero model-route requests, kept D v1's identity, and the next chat reply contained the corrected text. Ten messages and seven option cards reloaded from the saved thread. No browser exceptions were recorded.
+
+Completed demo: `http://127.0.0.1:5173/w/ws_c3b49b9c47e44b38bb9a3eeae1e1e374/studio?thread=thr_fe063b86d6834eab8f186e29097e4fe2`
+
+Artifacts (gitignored): `test-results/e2e-demo-chat-first-Studio-3781e-s-and-direct-edit-isolation/{studio.png,studio-export.png,timings.json}`. The screenshot and PNG were visually inspected.
+
+## Remaining limits
+
+No requested Studio acceptance check is failing. Live image-model latency varies. Jobs in progress are in memory and can be lost on API restart; completed threads, messages and versions remain in SQLite. Provider failures appear in the job and conversation. Decomposition/inpainting is still model-dependent rather than pixel-perfect. Stub mode supplies fixture options; conversational tool edits use real providers. Vite emits a non-fatal main-bundle size warning (approximately 783 kB before gzip).
+
+The app is running locally for browser review; no public hosting, push, or credential upload was performed.
+
+---
+
 # Integration validation — 2026-10-17
 
 Integrated in the main checkout on `main`. Nothing was pushed. All five worktrees were inspected for committed and uncommitted agent/e2e work. The optional `agent/api-decompose`, required-but-missing `agent/api-agent`, and optional `agent/qa` branches were absent; no alternate worktree contained `app/agent`, `routers/agent.py`, or `e2e/`. Per the updated scope, the rebuild step is deferred to the chat-first Studio agent. There is no rebuild button or `/agent` caller in this UI.

@@ -53,6 +53,11 @@ def test_new_version_groups_tools_and_preserves_parent(studio,monkeypatch):
     assert db.get('Design',original['id'])==original
     assert len(s.outputs_id())==1
     validate_contract('Design',out)
+    # Browsing v1 must not make a later named 'B' request resolve to the old version.
+    thread = deepcopy(studio[2])
+    thread['messages'].append(agent.message('assistant','B updated',designs=[out['id']]))
+    next_turn = agent.Session(c.new_job(),thread,'Change B',[],[original['id']])
+    assert next_turn.context()['latestByLabel']['Option B']==out['id']
 
 def test_image_edit_checks_stored_source_before_model(studio,monkeypatch):
     s = session(studio)
