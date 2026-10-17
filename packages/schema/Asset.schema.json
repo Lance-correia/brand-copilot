@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Asset.schema.json",
+  "title": "Asset",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^ast_[A-Za-z0-9_-]+$"
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^ws_[A-Za-z0-9_-]+$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "logo",
+        "font",
+        "image",
+        "icon",
+        "guideline",
+        "sample"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "brand_asset",
+        "generated",
+        "upload"
+      ]
+    },
+    "filename": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "mime": {
+      "type": "string"
+    },
+    "width": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "height": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "caption": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "id",
+    "workspaceId",
+    "kind",
+    "source",
+    "filename",
+    "url",
+    "mime",
+    "width",
+    "height",
+    "caption",
+    "tags",
+    "meta"
+  ],
+  "additionalProperties": false
+}

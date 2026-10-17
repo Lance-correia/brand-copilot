@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Design.schema.json",
+  "title": "Design",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^des_[A-Za-z0-9_-]+$"
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^ws_[A-Za-z0-9_-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "background": {
+      "$ref": "#/$defs/Background"
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "$ref": "Layer.schema.json"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "workspaceId",
+    "name",
+    "width",
+    "height",
+    "background",
+    "layers"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Background": {
+      "type": "object",
+      "properties": {
+        "colorToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "colorToken"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

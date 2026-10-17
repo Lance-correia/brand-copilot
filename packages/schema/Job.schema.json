@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Job.schema.json",
+  "title": "Job",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^job_[A-Za-z0-9_-]+$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "done",
+        "error"
+      ]
+    },
+    "progress": {
+      "type": "string"
+    },
+    "designs": {
+      "type": "array",
+      "items": {
+        "$ref": "Design.schema.json"
+      }
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "status",
+    "progress",
+    "designs",
+    "error"
+  ],
+  "additionalProperties": false
+}

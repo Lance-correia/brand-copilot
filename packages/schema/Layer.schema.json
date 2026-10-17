@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Layer.schema.json",
+  "title": "Layer",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/TextLayer"
+    },
+    {
+      "$ref": "#/$defs/ImageLayer"
+    },
+    {
+      "$ref": "#/$defs/ShapeLayer"
+    }
+  ],
+  "$defs": {
+    "TextLayer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        },
+        "type": {
+          "const": "text"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "background",
+            "hero",
+            "headline",
+            "subhead",
+            "body",
+            "cta",
+            "cta_bg",
+            "logo",
+            "decoration"
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rotation": {
+          "type": "number"
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        },
+        "fontToken": {
+          "type": "string"
+        },
+        "fontSize": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "colorToken": {
+          "type": "string"
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "lineHeight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fontWeight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "role",
+        "x",
+        "y",
+        "w",
+        "h",
+        "rotation",
+        "visible",
+        "locked",
+        "text",
+        "fontToken",
+        "fontSize",
+        "colorToken",
+        "align"
+      ],
+      "additionalProperties": false
+    },
+    "ImageLayer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        },
+        "type": {
+          "const": "image"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "background",
+            "hero",
+            "headline",
+            "subhead",
+            "body",
+            "cta",
+            "cta_bg",
+            "logo",
+            "decoration"
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rotation": {
+          "type": "number"
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "brand_asset",
+            "generated",
+            "upload"
+          ]
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        },
+        "fit": {
+          "type": "string",
+          "enum": [
+            "cover",
+            "contain"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "role",
+        "x",
+        "y",
+        "w",
+        "h",
+        "rotation",
+        "visible",
+        "locked",
+        "source",
+        "assetId",
+        "fit"
+      ],
+      "additionalProperties": false
+    },
+    "ShapeLayer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        },
+        "type": {
+          "const": "shape"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "background",
+            "hero",
+            "headline",
+            "subhead",
+            "body",
+            "cta",
+            "cta_bg",
+            "logo",
+            "decoration"
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rotation": {
+          "type": "number"
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "rect",
+            "ellipse"
+          ]
+        },
+        "fillToken": {
+          "type": "string"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "role",
+        "x",
+        "y",
+        "w",
+        "h",
+        "rotation",
+        "visible",
+        "locked",
+        "shape",
+        "fillToken"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

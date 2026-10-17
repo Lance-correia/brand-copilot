@@ -1,0 +1,113 @@
+from uuid import uuid4
+from datetime import datetime, timezone
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from app.schema import Workspace, Asset, BrandKit, Design, LintViolation
+from app.core import db, storage
+from app.core.config import use_stubs
+from app.core.fixtures import seed_workspace
+from app.core.validation import validate_contract
+from app.brand.lint import lint_design
+
+router = APIRouter(prefix='/api')
+
+class CreateWorkspace(BaseModel):
+    name: str = Field(min_length=1)
+
+@router.post('/workspaces', response_model=Workspace, status_code=201)
+def create_workspace(body: CreateWorkspace):
+    ws_id = 'ws_' + uuid4().hex
+    if use_stubs():
+        return seed_workspace(ws_id, body.name)
+    ws = Workspace(id=ws_id, name=body.name, createdAt=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), brandKitConfirmed=False)
+    db.put('Workspace', ws.id, ws.id, validate_contract('Workspace', ws))
+    return ws
+
+@router.get('/workspaces', response_model=list[Workspace])
+def list_workspaces():
+    return db.list_records('Workspace')
+
+@router.get('/workspaces/{ws}', response_model=Workspace)
+def get_workspace(ws: str):
+    return db.get('Workspace', ws)
+
+@router.post('/workspaces/{ws}/assets', response_model=Asset, status_code=201)
+def upload_asset(ws: str, file: UploadFile = File(...), kind: str = Form(...)):
+    if kind not in {'logo','font','image','icon','guideline','sample'}:
+        raise HTTPException(422, 'Invalid asset kind')
+    return storage.save_asset(ws, file.file.read(), file.filename, kind, 'upload' if kind == 'sample' else 'brand_asset')
+
+@router.get('/workspaces/{ws}/assets', response_model=list[Asset])
+def list_assets(ws: str, kind: str | None = None):
+    db.get('Workspace', ws)
+    return storage.list_assets(ws, kind)
+
+@router.delete('/assets/{id}', status_code=204)
+def delete_asset(id: str):
+    path = storage.asset_path(id)
+    path.unlink(missing_ok=True)
+    db.delete('Asset', id)
+    return Response(status_code=204)
+
+@router.get('/files/{assetId}')
+def get_file(assetId: str):
+    asset = storage.get_asset(assetId)
+    path = storage.asset_path(assetId)
+    if not path.is_file():
+        raise HTTPException(404, 'Asset file not found')
+    return FileResponse(path, media_type=asset.mime)
+
+@router.post('/workspaces/{ws}/brand-kit/extract', response_model=BrandKit)
+def extract_kit(ws: str):
+    db.get('Workspace', ws)
+    if not use_stubs():
+        raise HTTPException(501, 'Brand extraction belongs to Prompt 3')
+    kit = storage.get_brand_kit(ws).model_copy(update={'confirmed': False})
+    return save_kit(ws, kit)
+
+@router.get('/workspaces/{ws}/brand-kit', response_model=BrandKit)
+def get_kit(ws: str):
+    return storage.get_brand_kit(ws)
+
+@router.put('/workspaces/{ws}/brand-kit', response_model=BrandKit)
+def save_kit(ws: str, kit: BrandKit):
+    workspace = db.get('Workspace', ws)
+    if kit.workspaceId != ws:
+        raise HTTPException(422, 'Workspace id mismatch')
+    db.put('BrandKit', ws, ws, validate_contract('BrandKit', kit))
+    workspace['brandKitConfirmed'] = kit.confirmed
+    db.put('Workspace', ws, ws, workspace)
+    return kit
+
+@router.post('/workspaces/{ws}/lint', response_model=list[LintViolation], response_model_exclude_unset=True)
+def lint(ws: str, design: Design):
+    if design.workspaceId != ws:
+        raise HTTPException(422, 'Workspace id mismatch')
+    validate_contract('Design', design)
+    return lint_design(design, storage.get_brand_kit(ws))
+
+@router.get('/workspaces/{ws}/designs', response_model=list[Design], response_model_exclude_unset=True)
+def list_designs(ws: str):
+    db.get('Workspace', ws)
+    return db.list_records('Design', ws)
+
+@router.post('/workspaces/{ws}/designs', response_model=Design, status_code=201, response_model_exclude_unset=True)
+def create_design(ws: str, design: Design):
+    db.get('Workspace', ws)
+    if design.workspaceId != ws:
+        raise HTTPException(422, 'Workspace id mismatch')
+    db.put('Design', design.id, ws, validate_contract('Design', design))
+    return design
+
+@router.get('/designs/{id}', response_model=Design, response_model_exclude_unset=True)
+def get_design(id: str):
+    return db.get('Design', id)
+
+@router.put('/designs/{id}', response_model=Design, response_model_exclude_unset=True)
+def save_design(id: str, design: Design):
+    previous = db.get('Design', id)
+    if id != design.id or previous['workspaceId'] != design.workspaceId:
+        raise HTTPException(422, 'Design identity mismatch')
+    db.put('Design', id, design.workspaceId, validate_contract('Design', design))
+    return design

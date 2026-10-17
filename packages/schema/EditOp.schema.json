@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/EditOp.schema.json",
+  "title": "EditOp",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/AddLayerOp"
+    },
+    {
+      "$ref": "#/$defs/UpdateLayerOp"
+    },
+    {
+      "$ref": "#/$defs/RemoveLayerOp"
+    },
+    {
+      "$ref": "#/$defs/ReorderLayerOp"
+    },
+    {
+      "$ref": "#/$defs/ReplaceImageOp"
+    },
+    {
+      "$ref": "#/$defs/SetBackgroundOp"
+    }
+  ],
+  "$defs": {
+    "LayerProps": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "background",
+            "hero",
+            "headline",
+            "subhead",
+            "body",
+            "cta",
+            "cta_bg",
+            "logo",
+            "decoration"
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rotation": {
+          "type": "number"
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "locked": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        },
+        "fontToken": {
+          "type": "string"
+        },
+        "fontSize": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "colorToken": {
+          "type": "string"
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "lineHeight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fontWeight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "brand_asset",
+            "generated",
+            "upload"
+          ]
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        },
+        "fit": {
+          "type": "string",
+          "enum": [
+            "cover",
+            "contain"
+          ]
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "rect",
+            "ellipse"
+          ]
+        },
+        "fillToken": {
+          "type": "string"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "AddLayerOp": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "add_layer"
+        },
+        "layer": {
+          "$ref": "Layer.schema.json"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "op",
+        "layer"
+      ],
+      "additionalProperties": false
+    },
+    "UpdateLayerOp": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "update_layer"
+        },
+        "layerId": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        },
+        "props": {
+          "$ref": "#/$defs/LayerProps"
+        }
+      },
+      "required": [
+        "op",
+        "layerId",
+        "props"
+      ],
+      "additionalProperties": false
+    },
+    "RemoveLayerOp": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "remove_layer"
+        },
+        "layerId": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "op",
+        "layerId"
+      ],
+      "additionalProperties": false
+    },
+    "ReorderLayerOp": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "reorder_layer"
+        },
+        "layerId": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "op",
+        "layerId",
+        "index"
+      ],
+      "additionalProperties": false
+    },
+    "ReplaceImageOp": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "replace_image"
+        },
+        "layerId": {
+          "type": "string",
+          "pattern": "^lay_[A-Za-z0-9_-]+$"
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "brand_asset",
+            "generated",
+            "upload"
+          ]
+        }
+      },
+      "required": [
+        "op",
+        "layerId",
+        "assetId",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "SetBackgroundOp": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "const": "set_background"
+        },
+        "background": {
+          "type": "object",
+          "properties": {
+            "colorToken": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "colorToken"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "op",
+        "background"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

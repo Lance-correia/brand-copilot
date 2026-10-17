@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/BrandKit.schema.json",
+  "title": "BrandKit",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^ws_[A-Za-z0-9_-]+$"
+    },
+    "colors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ColorToken"
+      }
+    },
+    "fonts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FontToken"
+      }
+    },
+    "logos": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LogoRule"
+      }
+    },
+    "safeMarginPct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "imageryStyle": {
+      "type": "string"
+    },
+    "voice": {
+      "type": "string"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/BrandRule"
+      }
+    },
+    "confirmed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "workspaceId",
+    "colors",
+    "fonts",
+    "logos",
+    "safeMarginPct",
+    "imageryStyle",
+    "voice",
+    "rules",
+    "confirmed"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "ColorToken": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "hex": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "token",
+        "hex",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "FontToken": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        },
+        "minSize": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxSize": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "token",
+        "family",
+        "weight",
+        "assetId",
+        "minSize",
+        "maxSize"
+      ],
+      "additionalProperties": false
+    },
+    "LogoRule": {
+      "type": "object",
+      "properties": {
+        "assetId": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        },
+        "variant": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light"
+          ]
+        },
+        "minWidth": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "clearSpace": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "assetId",
+        "variant",
+        "minWidth",
+        "clearSpace"
+      ],
+      "additionalProperties": false
+    },
+    "BrandRule": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "check": {
+          "type": "string",
+          "enum": [
+            "palette",
+            "font",
+            "contrast",
+            "safe_margin",
+            "logo_min_size",
+            "logo_clear_space",
+            "text_overflow",
+            "manual"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "check"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

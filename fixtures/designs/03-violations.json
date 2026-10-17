@@ -1,0 +1,91 @@
+{
+  "id": "des_03",
+  "workspaceId": "ws_lumen",
+  "name": "Seeded violations",
+  "width": 1080,
+  "height": 1080,
+  "background": {
+    "colorToken": "paper"
+  },
+  "layers": [
+    {
+      "id": "lay_1",
+      "type": "image",
+      "role": "hero",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 630,
+      "rotation": 0,
+      "visible": true,
+      "locked": false,
+      "source": "generated",
+      "assetId": "ast_22",
+      "fit": "cover"
+    },
+    {
+      "id": "lay_2",
+      "type": "text",
+      "role": "headline",
+      "x": 12,
+      "y": 680,
+      "w": 936,
+      "h": 160,
+      "rotation": 0,
+      "visible": true,
+      "locked": false,
+      "text": "Mornings, slowed down",
+      "fontToken": "headline",
+      "fontSize": 80,
+      "colorToken": "off_palette",
+      "align": "left"
+    },
+    {
+      "id": "lay_3",
+      "type": "shape",
+      "role": "cta_bg",
+      "x": 72,
+      "y": 900,
+      "w": 320,
+      "h": 96,
+      "rotation": 0,
+      "visible": true,
+      "locked": false,
+      "shape": "rect",
+      "fillToken": "primary",
+      "radius": 48
+    },
+    {
+      "id": "lay_5",
+      "type": "text",
+      "role": "cta",
+      "x": 96,
+      "y": 924,
+      "w": 272,
+      "h": 48,
+      "rotation": 0,
+      "visible": true,
+      "locked": false,
+      "text": "Find your morning",
+      "fontToken": "body",
+      "fontSize": 24,
+      "colorToken": "paper",
+      "align": "center"
+    },
+    {
+      "id": "lay_4",
+      "type": "image",
+      "role": "logo",
+      "x": 840,
+      "y": 936,
+      "w": 80,
+      "h": 20,
+      "rotation": 0,
+      "visible": true,
+      "locked": false,
+      "source": "brand_asset",
+      "assetId": "ast_01",
+      "fit": "contain"
+    }
+  ]
+}

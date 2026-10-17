@@ -1,0 +1,49 @@
+{
+  "id": "centered-badge",
+  "name": "Centered badge",
+  "aspect": "1:1",
+  "width": 1080,
+  "height": 1080,
+  "slots": [
+    {
+      "role": "hero",
+      "kind": "image",
+      "box": [
+        0,
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "role": "headline",
+      "kind": "text",
+      "box": [
+        0.2,
+        0.32,
+        0.8,
+        0.55
+      ]
+    },
+    {
+      "role": "cta",
+      "kind": "text",
+      "box": [
+        0.3,
+        0.62,
+        0.7,
+        0.72
+      ]
+    },
+    {
+      "role": "logo",
+      "kind": "image",
+      "box": [
+        0.4,
+        0.8,
+        0.6,
+        0.86
+      ]
+    }
+  ]
+}

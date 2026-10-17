@@ -1,0 +1,35 @@
+{
+  "aspect": "1:1",
+  "regions": [
+    {
+      "role": "hero",
+      "box": [
+        0,
+        0,
+        1,
+        0.6
+      ]
+    },
+    {
+      "role": "headline",
+      "box": [
+        0.06,
+        0.63,
+        0.94,
+        0.78
+      ]
+    }
+  ],
+  "hierarchy": [
+    "hero",
+    "headline",
+    "cta",
+    "logo"
+  ],
+  "mood": "bright, unhurried",
+  "imageryStyle": "lifestyle photo, morning light",
+  "observedColors": [
+    "#F2C14E",
+    "#1B1B1F"
+  ]
+}

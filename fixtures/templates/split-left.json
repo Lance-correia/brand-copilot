@@ -1,0 +1,49 @@
+{
+  "id": "split-left",
+  "name": "Image left, text right",
+  "aspect": "1:1",
+  "width": 1080,
+  "height": 1080,
+  "slots": [
+    {
+      "role": "hero",
+      "kind": "image",
+      "box": [
+        0,
+        0,
+        0.48,
+        1
+      ]
+    },
+    {
+      "role": "headline",
+      "kind": "text",
+      "box": [
+        0.54,
+        0.12,
+        0.94,
+        0.5
+      ]
+    },
+    {
+      "role": "cta",
+      "kind": "text",
+      "box": [
+        0.54,
+        0.65,
+        0.94,
+        0.76
+      ]
+    },
+    {
+      "role": "logo",
+      "kind": "image",
+      "box": [
+        0.72,
+        0.86,
+        0.94,
+        0.92
+      ]
+    }
+  ]
+}

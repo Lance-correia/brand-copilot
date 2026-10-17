@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Workspace.schema.json",
+  "title": "Workspace",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^ws_[A-Za-z0-9_-]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "brandKitConfirmed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "createdAt",
+    "brandKitConfirmed"
+  ],
+  "additionalProperties": false
+}

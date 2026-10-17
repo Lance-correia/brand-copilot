@@ -1,0 +1,83 @@
+{
+  "workspaceId": "ws_lumen",
+  "colors": [
+    {
+      "token": "primary",
+      "hex": "#C8553D",
+      "role": "accent"
+    },
+    {
+      "token": "ink",
+      "hex": "#1B1B1F",
+      "role": "text"
+    },
+    {
+      "token": "paper",
+      "hex": "#FBF7F2",
+      "role": "background"
+    }
+  ],
+  "fonts": [
+    {
+      "token": "headline",
+      "family": "DM Serif Display",
+      "weight": 400,
+      "assetId": "ast_05",
+      "minSize": 32,
+      "maxSize": 120
+    },
+    {
+      "token": "body",
+      "family": "DM Sans",
+      "weight": 400,
+      "assetId": "ast_06",
+      "minSize": 16,
+      "maxSize": 40
+    }
+  ],
+  "logos": [
+    {
+      "assetId": "ast_01",
+      "variant": "dark",
+      "minWidth": 120,
+      "clearSpace": 0.5
+    },
+    {
+      "assetId": "ast_02",
+      "variant": "light",
+      "minWidth": 120,
+      "clearSpace": 0.5
+    }
+  ],
+  "safeMarginPct": 6,
+  "imageryStyle": "Natural light, warm tones, real people, no posed stock look",
+  "voice": "Short, active sentences",
+  "rules": [
+    {
+      "id": "COL-01",
+      "text": "Use only palette colors",
+      "check": "palette"
+    },
+    {
+      "id": "FONT-01",
+      "text": "Use headline and body fonts",
+      "check": "font"
+    },
+    {
+      "id": "SAFE-01",
+      "text": "Keep text inside a 6 percent safe margin",
+      "check": "safe_margin"
+    },
+    {
+      "id": "LOGO-01",
+      "text": "Logo must be at least 120 pixels wide",
+      "check": "logo_min_size"
+    },
+    {
+      "id": "CLEAR-01",
+      "text": "Leave half a logo height clear on each side",
+      "check": "logo_clear_space"
+    }
+  ],
+  "confirmed": false
+}

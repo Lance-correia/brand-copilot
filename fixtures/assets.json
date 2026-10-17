@@ -1,0 +1,124 @@
+[
+  {
+    "id": "ast_01",
+    "path": "brand/logo-dark.svg",
+    "kind": "logo",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_02",
+    "path": "brand/logo-light.svg",
+    "kind": "logo",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_05",
+    "path": "brand/fonts/DMSerifDisplay-Regular.ttf",
+    "kind": "font",
+    "source": "brand_asset",
+    "meta": {
+      "family": "DM Serif Display",
+      "weight": 400
+    }
+  },
+  {
+    "id": "ast_06",
+    "path": "brand/fonts/DMSans.ttf",
+    "kind": "font",
+    "source": "brand_asset",
+    "meta": {
+      "family": "DM Sans",
+      "weight": 400
+    }
+  },
+  {
+    "id": "ast_brand_1",
+    "path": "brand/images/coffee-01.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_2",
+    "path": "brand/images/coffee-02.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_3",
+    "path": "brand/images/coffee-03.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_4",
+    "path": "brand/images/coffee-04.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_5",
+    "path": "brand/images/coffee-05.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_6",
+    "path": "brand/images/coffee-06.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_7",
+    "path": "brand/images/coffee-07.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_brand_8",
+    "path": "brand/images/coffee-08.png",
+    "kind": "image",
+    "source": "brand_asset"
+  },
+  {
+    "id": "ast_sample_1",
+    "path": "samples/sample-1.png",
+    "kind": "sample",
+    "source": "upload"
+  },
+  {
+    "id": "ast_sample_2",
+    "path": "samples/sample-2.png",
+    "kind": "sample",
+    "source": "upload"
+  },
+  {
+    "id": "ast_20",
+    "path": "generated/hero-1.png",
+    "kind": "image",
+    "source": "generated"
+  },
+  {
+    "id": "ast_21",
+    "path": "generated/hero-2.png",
+    "kind": "image",
+    "source": "generated"
+  },
+  {
+    "id": "ast_22",
+    "path": "generated/hero-3.png",
+    "kind": "image",
+    "source": "generated"
+  },
+  {
+    "id": "ast_23",
+    "path": "generated/hero-4.png",
+    "kind": "image",
+    "source": "generated"
+  },
+  {
+    "id": "ast_guidelines",
+    "path": "brand/guidelines.pdf",
+    "kind": "guideline",
+    "source": "brand_asset"
+  }
+]

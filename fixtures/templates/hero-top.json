@@ -1,0 +1,49 @@
+{
+  "id": "hero-top",
+  "name": "Hero top, text below",
+  "aspect": "1:1",
+  "width": 1080,
+  "height": 1080,
+  "slots": [
+    {
+      "role": "hero",
+      "kind": "image",
+      "box": [
+        0,
+        0,
+        1,
+        0.6
+      ]
+    },
+    {
+      "role": "headline",
+      "kind": "text",
+      "box": [
+        0.06,
+        0.63,
+        0.94,
+        0.78
+      ]
+    },
+    {
+      "role": "cta",
+      "kind": "text",
+      "box": [
+        0.06,
+        0.83,
+        0.36,
+        0.92
+      ]
+    },
+    {
+      "role": "logo",
+      "kind": "image",
+      "box": [
+        0.78,
+        0.86,
+        0.94,
+        0.92
+      ]
+    }
+  ]
+}

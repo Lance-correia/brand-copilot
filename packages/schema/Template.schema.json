@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Template.schema.json",
+  "title": "Template",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "aspect": {
+      "type": "string"
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "background",
+              "hero",
+              "headline",
+              "subhead",
+              "body",
+              "cta",
+              "cta_bg",
+              "logo",
+              "decoration"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "text",
+              "shape"
+            ]
+          },
+          "box": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "role",
+          "kind",
+          "box"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "aspect",
+    "width",
+    "height",
+    "slots"
+  ],
+  "additionalProperties": false
+}
