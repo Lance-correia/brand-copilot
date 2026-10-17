@@ -158,3 +158,67 @@ def test_live_caption(monkeypatch):
     asset = upload(ws, 'brand/images/coffee-01.png', 'image')
     captioned = client.get(f'/api/workspaces/{ws}/assets').json()[0]
     assert captioned['caption'] and captioned['caption'] != 'Coffee' and captioned['tags'], captioned
+
+def test_upload_tags_merge_with_caption_tags(monkeypatch):
+    ws = bare_workspace(monkeypatch)
+    path = FIXTURES / 'brand/images/coffee-05.png'
+    response = client.post(f'/api/workspaces/{ws}/assets', files={'file': (path.name, path.read_bytes())},
+                           data={'kind': 'image', 'tags': ' Hero, summer ,,hero'})
+    assert response.status_code == 201 and response.json()['tags'] == ['hero', 'summer']
+    tags = client.get(f'/api/workspaces/{ws}/assets').json()[0]['tags']
+    assert tags[:2] == ['hero', 'summer'] and len(tags) > 2 and len(tags) == len(set(tags))
+
+def image_bytes(format, size=(64, 48)):
+    import io
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new('RGB', size, '#C8553D').save(buffer, format)
+    return buffer.getvalue()
+
+def test_guideline_and_sample_formats(monkeypatch):
+    ws = bare_workspace(monkeypatch)
+    svg = (FIXTURES / 'brand/logo-dark.svg').read_bytes()
+    post = lambda kind, name, data: client.post(f'/api/workspaces/{ws}/assets', files={'file': (name, data)}, data={'kind': kind})
+    for format, mime in (('PNG', 'image/png'), ('JPEG', 'image/jpeg'), ('WEBP', 'image/webp')):
+        response = post('guideline', 'page.' + format.lower(), image_bytes(format))
+        assert response.status_code == 201 and response.json()['mime'] == mime and response.json()['width'] == 64, response.text
+    for kind, name, data in (('guideline', 'page.gif', image_bytes('GIF')), ('guideline', 'page.svg', svg), ('sample', 's.svg', svg)):
+        assert post(kind, name, data).status_code == 422, (kind, name)
+    assert post('sample', 's.webp', image_bytes('WEBP')).json()['source'] == 'upload'
+
+def test_extract_from_page_images_batches_flash_calls(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from app.llm import deepseek
+    ws = bare_workspace(monkeypatch)
+    ids = upload_brand(ws)  # includes the PDF, so its text rides along with the first batch
+    for i in range(10):
+        client.post(f'/api/workspaces/{ws}/assets', files={'file': (f'page-{i}.png', image_bytes('PNG', (1920, 1080)))}, data={'kind': 'guideline'})
+    calls = []
+    drafts = [
+        {'colors': [{'token': 'primary', 'hex': '#c8553d', 'role': 'accent'}, {'token': 'ink', 'hex': '#1B1B1F', 'role': 'text'}],
+         'fonts': [{'token': 'headline', 'family': 'DM Serif Display', 'weight': 400, 'assetId': 'ast_x', 'minSize': 32, 'maxSize': 120}],
+         'logos': [], 'safeMarginPct': 0, 'imageryStyle': '', 'voice': 'Warm and clear', 'rules': []},
+        {'colors': [{'token': 'brand_red', 'hex': '#C8553D', 'role': 'accent'}, {'token': 'paper', 'hex': '#FBF7F2', 'role': 'background'}],
+         'fonts': [{'token': 'body', 'family': 'DM Sans', 'weight': 400, 'assetId': 'ast_y', 'minSize': 16, 'maxSize': 40}],
+         'logos': [{'assetId': ids['logo-dark.svg'], 'variant': 'light', 'minWidth': 140, 'clearSpace': 1}],
+         'safeMarginPct': 8, 'imageryStyle': 'Natural light', 'voice': 'Other', 'rules': []},
+    ]
+    def fake_chat(model, messages, tools=None, json_schema=None, images=None):
+        calls.append((model, messages[-1]['content'], images))
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(drafts[len(calls) - 1])))])
+    monkeypatch.setattr(deepseek, 'chat', fake_chat)
+    monkeypatch.setenv('USE_STUBS', '0')
+    monkeypatch.setenv('DEEPSEEK_FLASH_MODEL', 'flash-test')
+    response = client.post(f'/api/workspaces/{ws}/brand-kit/extract')
+    assert response.status_code == 200, response.text
+    assert [(model, len(images)) for model, _, images in calls] == [('flash-test', 8), ('flash-test', 2)]
+    assert all(i.startswith('data:image/jpeg;base64,') for _, _, images in calls for i in images)
+    assert 'Guidelines text:' in calls[0][1] and 'Clear space' in calls[0][1] and 'Guidelines text:' not in calls[1][1]
+    kit = validate_contract('BrandKit', response.json())
+    assert [(c['token'], c['hex']) for c in kit['colors']] == [('primary', '#C8553D'), ('ink', '#1B1B1F'), ('paper', '#FBF7F2')]
+    assert {f['token']: f['assetId'] for f in kit['fonts']} == {
+        'headline': ids['fonts/DMSerifDisplay-Regular.ttf'], 'body': ids['fonts/DMSans.ttf']}
+    assert {l['assetId']: (l['variant'], l['minWidth'], l['clearSpace']) for l in kit['logos']} == {
+        ids['logo-dark.svg']: ('dark', 140, 1), ids['logo-light.svg']: ('light', 140, 1)}
+    assert (kit['safeMarginPct'], kit['voice'], kit['imageryStyle']) == (8, 'Warm and clear', 'Natural light')

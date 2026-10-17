@@ -1,4 +1,7 @@
-"""Brand-kit extraction: guideline PDF text -> DeepSeek-V4-Pro draft, then uploaded files overwrite what they know."""
+"""Brand-kit extraction: guideline PDF text (DeepSeek-V4-Pro) or page images plus text (DeepSeek-V4.1-Flash vision)
+become a draft; then the uploaded files overwrite what they know."""
+import base64
+import io
 import json
 import os
 import re
@@ -23,6 +26,7 @@ DEFAULT_RULES = [
     {'id': 'TEXT-01', 'text': 'Text fits its box', 'check': 'text_overflow'},
 ]
 FONT_SIZES = {'headline': (32, 120), 'body': (16, 40)}
+PAGES_PER_CALL = 8
 SYSTEM = ('You extract a brand kit from brand guidelines. Return JSON matching the schema exactly. '
           'colors: token is a short lowercase identifier (use the names in the guidelines when given), hex is #RRGGBB, '
           'role is accent, text, background or neutral. fonts: token is headline, body or another short role name; '
@@ -32,7 +36,10 @@ SYSTEM = ('You extract a brand kit from brand guidelines. Return JSON matching t
           'These checks run automatically, so use them whenever a rule is about that topic: palette (only brand colors), '
           'font (brand fonts and size ranges), contrast, safe_margin, logo_min_size, logo_clear_space, text_overflow. '
           'Use check manual only for rules none of these cover. '
-          'imageryStyle and voice are one sentence each. confirmed is false.')
+          'Look for colors with hex values, fonts, logo rules (clear space, minimum size, allowed backgrounds), safe zones and tone. '
+          'Allowed logo backgrounds go in variant and in a manual rule. clearSpace is the stated clear space in logo heights '
+          '("half the logo height" is 0.5). A safe zone becomes safeMarginPct. Use 0 for any number the guidelines do not state. '
+          'voice is the tone of voice and imageryStyle the photo style, one sentence each. confirmed is false.')
 
 def slug(text):
     return re.sub(r'[^a-z0-9]+', '_', str(text).lower()).strip('_')
@@ -47,15 +54,42 @@ def pdf_text(path):
     except Exception:
         return ''
 
-def model_draft(ws_id, text, logos, fonts):
+def page_image(path):
+    """Guideline page as a JPEG data URL, downscaled so eight pages fit one request."""
+    with Image.open(path) as image:
+        image = image.convert('RGB')
+        image.thumbnail((1600, 1600))
+        buffer = io.BytesIO()
+        image.save(buffer, 'JPEG', quality=85)
+    return 'data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode()
+
+def merge_drafts(drafts):
+    """Concatenate list fields (the cleanup in extract_brand_kit dedupes); first stated value wins for the rest."""
+    merged = {key: [item for d in drafts for item in d.get(key) or []] for key in ('colors', 'fonts', 'logos', 'rules')}
+    for key in ('safeMarginPct', 'imageryStyle', 'voice'):
+        merged[key] = next((d[key] for d in drafts if d.get(key)), None)
+    return merged
+
+def model_draft(ws_id, text, pages, logos, fonts):
     if use_stubs():
         return json.loads((FIXTURES / 'brand/brand-kit.json').read_text())
     from app.llm.deepseek import chat
     schema = {k: v for k, v in validators()['BrandKit'].schema.items() if k not in ('$schema', '$id', 'title')}
     uploads = [{'assetId': a.id, 'kind': a.kind, 'filename': a.filename, **a.meta} for a in logos + fonts]
-    prompt = f'Workspace id: {ws_id}\nUploaded assets:\n{json.dumps(uploads, indent=1)}\n\nGuidelines text:\n{text[:40000]}'
-    result = chat(os.getenv('DEEPSEEK_PRO_MODEL'), [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': prompt}], json_schema=schema)
-    return parse_json(result.choices[0].message.content)
+    intro = f'Workspace id: {ws_id}\nUploaded assets:\n{json.dumps(uploads, indent=1)}'
+    guidelines = f'\n\nGuidelines text:\n{text[:40000]}' if text else ''
+    def ask(model, prompt, images=None):
+        messages = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': prompt}]
+        return parse_json(chat(os.getenv(model), messages, json_schema=schema, images=images).choices[0].message.content)
+    if not pages:
+        return ask('DEEPSEEK_PRO_MODEL', intro + guidelines)
+    drafts = []
+    for start in range(0, len(pages), PAGES_PER_CALL):
+        chunk = pages[start:start + PAGES_PER_CALL]
+        note = f'\n\nAttached: guideline pages {start + 1}-{start + len(chunk)} of {len(pages)}. Extract only what these pages and the text state.'
+        drafts.append(ask('DEEPSEEK_FLASH_MODEL', intro + note + (guidelines if start == 0 else ''),
+                          [page_image(storage.asset_path(p.id)) for p in chunk]))
+    return merge_drafts(drafts)
 
 def to_hex(rgb):
     return '#' + ''.join(f'{v:02X}' for v in rgb[:3])
@@ -153,9 +187,11 @@ def extract_brand_kit(ws_id) -> BrandKit:
     assets = storage.list_assets(ws_id)
     logos = [a for a in assets if a.kind == 'logo']
     fonts = [a for a in assets if a.kind == 'font']
-    text = '\n\n'.join(pdf_text(storage.asset_path(a.id)) for a in assets if a.kind == 'guideline' and a.mime == 'application/pdf').strip()
-    if text:
-        draft = model_draft(ws_id, text, logos, fonts)
+    guidelines = [a for a in assets if a.kind == 'guideline']
+    text = '\n\n'.join(pdf_text(storage.asset_path(a.id)) for a in guidelines if a.mime == 'application/pdf').strip()
+    pages = [a for a in guidelines if a.mime != 'application/pdf']
+    if text or pages:
+        draft = model_draft(ws_id, text, pages, logos, fonts)
     else:
         tags = Counter(t for a in assets if a.kind == 'image' for t in a.tags if t != 'image')
         draft = {'colors': derive_palette(assets), 'safeMarginPct': 6, 'rules': DEFAULT_RULES, 'voice': 'Clear, warm and concise',
@@ -164,7 +200,7 @@ def extract_brand_kit(ws_id) -> BrandKit:
     colors, tokens = [], set()
     for color in draft.get('colors') or []:
         token, hex_ = slug(color.get('token')), str(color.get('hex', '')).upper()
-        if token and token not in tokens and re.fullmatch(r'#[0-9A-F]{6}', hex_):
+        if token and token not in tokens and re.fullmatch(r'#[0-9A-F]{6}', hex_) and hex_ not in {c['hex'] for c in colors}:
             tokens.add(token)
             colors.append({'token': token, 'hex': hex_, 'role': slug(color.get('role')) or 'accent'})
     if len(colors) < 3:
@@ -173,13 +209,13 @@ def extract_brand_kit(ws_id) -> BrandKit:
                 tokens.add(color['token'])
                 colors.append(color)
 
-    by_asset = {l.get('assetId'): l for l in draft.get('logos') or []}
-    default = next(iter(by_asset.values()), {})
-    logo_rules = []
+    draft_logos, logo_rules = draft.get('logos') or [], []
     for asset in logos:
-        rule = by_asset.get(asset.id, default)
+        # This logo's entries first, then any other; 0 counts as not stated (models emit it for missing values).
+        ordered = [l for l in draft_logos if l.get('assetId') == asset.id] + draft_logos
+        stated = lambda key, default: next((l[key] for l in ordered if num(l.get(key), 0) > 0), default)
         logo_rules.append({'assetId': asset.id, 'variant': logo_variant(asset),
-                           'minWidth': num(rule.get('minWidth'), 120, 1), 'clearSpace': num(rule.get('clearSpace'), 0.5)})
+                           'minWidth': stated('minWidth', 120), 'clearSpace': stated('clearSpace', 0.5)})
 
     rules, ids = [], set()
     for rule in draft.get('rules') or DEFAULT_RULES:
@@ -190,7 +226,7 @@ def extract_brand_kit(ws_id) -> BrandKit:
     # Lint always runs every automatic check, so the kit lists a rule for each one.
     rules += [r for r in DEFAULT_RULES if r['check'] not in {x['check'] for x in rules} and r['id'] not in ids]
     kit = {'workspaceId': ws_id, 'colors': colors, 'fonts': link_fonts(draft.get('fonts') or [], fonts), 'logos': logo_rules,
-           'safeMarginPct': min(num(draft.get('safeMarginPct'), 6), 50),
+           'safeMarginPct': min(num(draft.get('safeMarginPct') or None, 6), 50),  # 0 means not stated
            'imageryStyle': str(draft.get('imageryStyle') or ''), 'voice': str(draft.get('voice') or ''),
            'rules': rules, 'confirmed': False}
     return BrandKit.model_validate(validate_contract('BrandKit', kit))

@@ -40,13 +40,16 @@ def get_workspace(ws: str):
     return db.get('Workspace', ws)
 
 @router.post('/workspaces/{ws}/assets', response_model=Asset, status_code=201)
-def upload_asset(ws: str, background: BackgroundTasks, file: UploadFile = File(...), kind: str = Form(...)):
+def upload_asset(ws: str, background: BackgroundTasks, file: UploadFile = File(...), kind: str = Form(...), tags: str = Form('')):
     if kind not in KINDS:
         raise HTTPException(422, f'Invalid asset kind {kind!r}; expected one of {", ".join(sorted(KINDS))}')
     try:
         asset = storage.save_asset(ws, file.file.read(), file.filename, kind, 'upload' if kind == 'sample' else 'brand_asset')
     except ValueError as exc:
         raise HTTPException(422, str(exc))
+    user_tags = list(dict.fromkeys(t.strip().lower() for t in tags.split(',') if t.strip()))
+    if user_tags:
+        asset = storage.set_caption(asset.id, '', user_tags)
     background.add_task(caption_asset, asset.id)
     return asset
 

@@ -11,6 +11,8 @@ from .config import DATA_DIR
 from .validation import validate_contract
 
 FONT_MIME = {'.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2'}
+PAGE_FORMATS = {'PNG', 'JPEG', 'WEBP'}  # guideline slide pages
+EXPECTED = {'guideline': 'PDF, PNG, JPG or WebP', 'sample': 'a raster image'}  # kinds that reject SVG
 
 def _ext(filename):
     ext = Path(filename).suffix.lower()
@@ -38,19 +40,24 @@ def inspect_file(data: bytes, ext, kind):
         if kind != 'guideline':
             raise ValueError(f'PDF files are not valid for kind {kind}')
         return 'application/pdf', None, None, {}
+    expected = EXPECTED.get(kind, 'image or SVG')
     try:
         with Image.open(io.BytesIO(data)) as image:
             image.verify()
-            return Image.MIME.get(image.format, 'application/octet-stream'), image.size[0], image.size[1], {}
+            format, (width, height) = image.format, image.size
     except (OSError, ValueError, Image.DecompressionBombError):
-        pass
+        format = None
+    if format:
+        if kind == 'guideline' and format not in PAGE_FORMATS:
+            raise ValueError(f'{format} is not valid for kind guideline (expected {expected})')
+        return Image.MIME.get(format, 'application/octet-stream'), width, height, {}
     try:
         svg = ET.fromstring(data)
     except ET.ParseError:
         svg = None
-    if svg is not None and svg.tag.rsplit('}', 1)[-1] == 'svg':
+    if svg is not None and svg.tag.rsplit('}', 1)[-1] == 'svg' and kind not in EXPECTED:
         return ('image/svg+xml', *_svg_size(svg), {})
-    raise ValueError(f'Not a valid {kind} file (expected {"PDF or image" if kind == "guideline" else "image or SVG"})')
+    raise ValueError(f'Not a valid {kind} file (expected {expected})')
 
 def save_asset(ws_id, data: bytes, filename, kind, source, meta=None) -> Asset:
     db.get('Workspace', ws_id)

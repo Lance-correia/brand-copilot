@@ -37,6 +37,6 @@ def caption_asset(asset_id, use_model=None):
                 caption, tags = str(data['caption']).strip(), [str(t).strip().lower() for t in data['tags'] if str(t).strip()]
             except Exception:
                 log.exception('Model captioning failed for %s; using filename caption', asset_id)
-        storage.set_caption(asset_id, caption, tags)
+        storage.set_caption(asset_id, caption, dict.fromkeys([*asset.tags, *tags]))  # upload tags first
     except Exception:
         log.exception('Captioning failed for %s', asset_id)
