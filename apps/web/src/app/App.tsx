@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Link, NavLink, useLocation, useMatch } from 'react-router';
+import { Routes, Route, Link, NavLink, useLocation, useMatch, Navigate, useParams } from 'react-router';
 import Welcome from '../screens/Welcome';
 import BrandIdentity from '../screens/BrandIdentity';
 import UseScreen from '../use/UseScreen';
+import StudioScreen from '../studio/StudioScreen';
 import { getWorkspace } from '../api/client';
 import type { Workspace } from '../types';
 import './styles.css';
@@ -26,17 +27,25 @@ function TopBar() {
     <nav className="steps" aria-label="Steps">
       <NavLink to="/" end>1 Welcome</NavLink>
       {id ? <NavLink to={`/w/${id}/brand`}>2 Brand identity</NavLink> : <span aria-disabled="true">2 Brand identity</span>}
-      {id && useReady ? <NavLink to={`/w/${id}/use`}>3 Use</NavLink>
-        : <span aria-disabled="true" title="Confirm the brand kit first">3 Use</span>}
+      {id && useReady ? <NavLink to={`/w/${id}/studio`}>3 Studio</NavLink>
+        : <span aria-disabled="true" title="Confirm the brand kit first">3 Studio</span>}
     </nav>
   </header>;
+}
+
+function LegacyUse() {
+  const { id } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/w/${id}/studio${search}`} replace />;
 }
 
 export function App() {
   return <><TopBar /><main><Routes>
     <Route path="/" element={<Welcome />} />
     <Route path="/w/:id/brand" element={<BrandIdentity />} />
-    <Route path="/w/:id/use" element={<UseScreen />} />
+    <Route path="/w/:id/use" element={<LegacyUse />} />
+    <Route path="/w/:id/studio" element={<StudioScreen />} />
+    <Route path="/w/:id/editor" element={<UseScreen />} />
     <Route path="*" element={<p>Page not found. <Link to="/">Go home</Link></p>} />
   </Routes></main></>;
 }

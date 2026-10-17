@@ -66,7 +66,7 @@ export default function BrandIdentity() {
   const confirm = () => run('confirm', async () => {
     if (!kit) return;
     await saveBrandKit(ws, { ...kit, confirmed: true });
-    navigate(`/w/${ws}/use`);
+    navigate(`/w/${ws}/studio`);
   });
 
   const brandAssets = assets.filter(a => a.source === 'brand_asset');

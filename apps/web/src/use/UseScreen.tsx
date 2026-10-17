@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { api } from '../api/client';
-import { CopilotPanel, LintPanel, StartModal, VariantsGrid } from '../copilot';
-import { useCopilotStore } from '../copilot/shared';
+import { LintPanel } from '../copilot';
 import { loadBrandFonts } from '../lib/fonts';
 import type { Asset } from '../types';
 import { CanvasView } from './CanvasView';
@@ -87,7 +86,7 @@ export default function UseScreen() {
 
   // Keep the open design in the URL so a reload reopens it.
   useEffect(() => {
-    if (design && params.get('design') !== design.id) setParams({ design: design.id }, { replace: true });
+    if (design && params.get('design') !== design.id) setParams(previous => { const next = new URLSearchParams(previous); next.set('design', design.id); return next; }, { replace: true });
   }, [design?.id]);
 
   useLayoutEffect(() => {
@@ -138,7 +137,7 @@ export default function UseScreen() {
         <span className="use-spacer" />
         <button onClick={() => useCanvasStore.getState().undo()} title="Undo (Cmd/Ctrl+Z)">Undo</button>
         <button onClick={() => useCanvasStore.getState().redo()} title="Redo (Shift+Cmd/Ctrl+Z)">Redo</button>
-        <button onClick={() => useCopilotStore.setState({ gridOpen: true })}>Variants</button>
+        <Link to={`/w/${ws}/studio${params.get("thread") ? `?thread=${params.get("thread")}` : ""}`}>Back to Studio</Link>
         <button disabled={!design} onClick={saveNow} title="Cmd/Ctrl+S">Save</button>
         <button disabled={!design} onClick={() => void exportPng()}>PNG</button>
         <button disabled={!design} onClick={exportJson}>JSON</button>
@@ -159,9 +158,6 @@ export default function UseScreen() {
     <aside className="use-right">
       {design && <><LayersPanel /><PropertiesPanel ws={ws} assets={assets} onAsset={a => setAssets(list => [...list, a])} /></>}
       <LintPanel />
-      <CopilotPanel />
-      <StartModal />
-      <VariantsGrid />
     </aside>
   </section>;
 }

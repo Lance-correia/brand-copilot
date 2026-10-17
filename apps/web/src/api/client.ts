@@ -1,4 +1,4 @@
-import type { Workspace, Asset, BrandKit, Design, DesignSpec, EditOp, LintViolation, Job } from '../types';
+import type { Workspace, Asset, BrandKit, Design, DesignSpec, EditOp, LintViolation, Job, Thread } from '../types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); this.name = 'ApiError'; }
@@ -50,6 +50,11 @@ export const getJob = (jobId: string) => request<Job>(`/jobs/${part(jobId)}`);
 export const editImage = (ws: string, body: { assetId: string; instruction: string }) => request<Asset>(`/workspaces/${part(ws)}/images/edit`, json('POST', body));
 export const chat = (ws: string, body: { design: Design; selection: string[]; message: string }) => request<{ reply: string; ops: EditOp[] }>(`/workspaces/${part(ws)}/chat`, json('POST', body));
 
+export const createThread = (ws: string, body: { title?: string } = {}) => request<Thread>(`/workspaces/${part(ws)}/threads`, json('POST', body));
+export const listThreads = (ws: string) => request<Thread[]>(`/workspaces/${part(ws)}/threads`);
+export const getThread = (id: string) => request<Thread>(`/threads/${part(id)}`);
+export const sendThreadMessage = (id: string, body: { text: string; attachmentAssetIds?: string[]; focusDesignIds?: string[] }) => request<{ jobId: string }>(`/threads/${part(id)}/messages`, json('POST', body));
+
 export const api = { createWorkspace, listWorkspaces, getWorkspace, uploadAsset, listAssets, deleteAsset, getFile,
   extractBrandKit, getBrandKit, saveBrandKit, lintDesign, listDesigns, createDesign, getDesign, saveDesign,
-  uploadSample, decompose, generateVariants, getJob, editImage, chat };
+  uploadSample, decompose, generateVariants, getJob, editImage, chat, createThread, listThreads, getThread, sendThreadMessage };

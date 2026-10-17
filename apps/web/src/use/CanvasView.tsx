@@ -6,20 +6,21 @@ import { BoxText, colorHex, createLayerObject, layerIds } from './render';
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
-function setInteractivity(obj: FabricObject, layer: Layer) {
+function setInteractivity(obj: FabricObject, layer: Layer, textOnly = false) {
   const locked = layer.locked;
-  obj.set({ evented: layer.visible, hasControls: !locked, lockMovementX: locked, lockMovementY: locked,
-    lockScalingX: locked, lockScalingY: locked, lockRotation: locked, hoverCursor: locked ? 'default' : 'move' });
+  obj.set({ evented: layer.visible && (!textOnly || layer.type === 'text'), hasControls: !locked && !textOnly, lockMovementX: locked || textOnly, lockMovementY: locked || textOnly,
+    lockScalingX: locked || textOnly, lockScalingY: locked || textOnly, lockRotation: locked || textOnly, hoverCursor: locked ? 'default' : 'move' });
   if (obj instanceof BoxText) obj.editable = !locked;
 }
 
 interface Props {
   zoom: number;
+  textOnly?: boolean;
   onDropAsset(assetId: string, point: { x: number; y: number }): void;
 }
 
 /** The interactive Fabric canvas. It mirrors the store and turns user gestures into ops. */
-export function CanvasView({ zoom, onDropAsset }: Props) {
+export function CanvasView({ zoom, onDropAsset, textOnly = false }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
   const design = useCanvasStore(s => s.design)!;
@@ -33,12 +34,13 @@ export function CanvasView({ zoom, onDropAsset }: Props) {
     const store = useCanvasStore;
     const objects = new Map<string, FabricObject>();
     const rendered = new Map<string, { layer: Layer; kit: BrandKit }>();
+    let disposed = false;
     let quiet = false; // set while we change the selection ourselves, so canvas events don't echo back
     const layerOf = (id: string) => store.getState().design?.layers.find(l => l.id === id);
 
     async function sync() {
       const { design, kit } = store.getState();
-      if (!design || !kit) return;
+      if (disposed || !design || !kit) return;
       canvas.backgroundColor = colorHex(kit, design.background.colorToken);
       const ids = new Set(design.layers.map(l => l.id));
       for (const [id, obj] of objects) if (!ids.has(id)) { canvas.remove(obj); objects.delete(id); rendered.delete(id); }
@@ -48,8 +50,8 @@ export function CanvasView({ zoom, onDropAsset }: Props) {
         const entry = { layer, kit };
         rendered.set(layer.id, entry);
         const obj = await createLayerObject(layer, kit);
-        if (rendered.get(layer.id) !== entry) return; // superseded while loading
-        setInteractivity(obj, layer);
+        if (disposed || rendered.get(layer.id) !== entry) return; // superseded while loading
+        setInteractivity(obj, layer, textOnly);
         const old = objects.get(layer.id);
         quiet = true;
         const wasActive = !!old && canvas.getActiveObject() === old;
@@ -59,6 +61,7 @@ export function CanvasView({ zoom, onDropAsset }: Props) {
         if (wasActive) canvas.setActiveObject(obj);
         quiet = false;
       }));
+      if (disposed) return;
       // Stacking follows the current layer order, whichever sync finishes last.
       store.getState().design?.layers.forEach((l, i) => { const obj = objects.get(l.id); if (obj) canvas.moveObjectTo(obj, i); });
       syncSelection();
@@ -134,8 +137,8 @@ export function CanvasView({ zoom, onDropAsset }: Props) {
       else if (s.selection !== prev.selection) syncSelection();
       else if (s.proposal !== prev.proposal) canvas.requestRenderAll();
     });
-    return () => { document.removeEventListener('pointerdown', finishExternalEdit, true); unsubscribe(); canvasRef.current = null; void canvas.dispose().then(() => el.remove()); };
-  }, []);
+    return () => { disposed = true; document.removeEventListener('pointerdown', finishExternalEdit, true); unsubscribe(); canvasRef.current = null; void canvas.dispose().then(() => el.remove()); };
+  }, [textOnly]);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -146,7 +149,7 @@ export function CanvasView({ zoom, onDropAsset }: Props) {
 
   function onDrop(event: React.DragEvent) {
     const assetId = event.dataTransfer.getData('application/x-brand-asset');
-    if (!assetId || !canvasRef.current) return;
+    if (textOnly || !assetId || !canvasRef.current) return;
     event.preventDefault();
     const p = canvasRef.current.getScenePoint(event.nativeEvent as unknown as TPointerEvent);
     onDropAsset(assetId, { x: p.x, y: p.y });

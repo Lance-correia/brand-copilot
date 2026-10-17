@@ -12,7 +12,7 @@ export default function Welcome() {
 
   useEffect(() => { listWorkspaces().then(setWorkspaces, e => setError(e.message)); }, []);
 
-  const open = (ws: Workspace) => navigate(`/w/${ws.id}/${ws.brandKitConfirmed ? 'use' : 'brand'}`);
+  const open = (ws: Workspace) => navigate(`/w/${ws.id}/${ws.brandKitConfirmed ? 'studio' : 'brand'}`);
 
   async function create(event: FormEvent) {
     event.preventDefault();
