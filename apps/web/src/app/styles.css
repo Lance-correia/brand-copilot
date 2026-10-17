@@ -53,7 +53,9 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .asset { display: flex; gap: .6rem; align-items: center; }
 .asset-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .asset-meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thumb { width: 48px; height: 48px; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: #fafafa; flex: none; }
+.thumb { width: 48px; height: 48px; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; flex: none;
+  /* Checkerboard so light logo variants stay visible. */
+  background: repeating-conic-gradient(#e4e4e4 0 25%, #fafafa 0 50%) 0 0 / 12px 12px; }
 .thumb-text { display: grid; place-items: center; font-weight: 700; color: var(--muted); }
 .tags { display: flex; gap: .25rem; flex-wrap: wrap; }
 .tag { font-size: .72rem; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 .35rem; }
