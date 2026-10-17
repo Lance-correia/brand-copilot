@@ -66,7 +66,9 @@ def plan(kit, catalogue, spec, templates, brief):
         '- angle: one short phrase naming the creative idea.\n'
         "- copy: headline (max 6 words), subhead (max 12 words), cta (max 3 words), all in the brand voice.\n"
         '- For each image slot (hero/background) either pick a fitting brand image from assets by id in assetPicks, '
-        'or write an imagePrompts entry describing the photo subject and composition. Never ask for text in images.\n'
+        'or write an imagePrompts entry describing the photo subject, setting, light and composition. '
+        'Use brand images in at most 2 variants; the others get fresh imagePrompts. Never ask for text in images.\n'
+        '- Vary the aspect: include at least one non-square template when one exists.\n'
         '- colors are palette tokens: background for the canvas and panels, accent for buttons, text for copy. '
         'text must contrast strongly with background.\n\n'
         + json.dumps(context))
