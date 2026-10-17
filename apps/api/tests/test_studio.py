@@ -143,7 +143,8 @@ def test_failed_model_turn_persists_explanatory_pair(studio,monkeypatch):
 
 
 def test_split_with_fontless_kit_uses_local_fallback(studio,monkeypatch):
-    from app.decompose import pipeline
+    from app.decompose import pipeline, ocr
+    monkeypatch.setattr(ocr,'read_text',lambda path:[])
     ws,client,thread,design=studio
     kit=db.get('BrandKit',ws)
     kit['fonts']=[]

@@ -66,11 +66,20 @@ def clean_plate(original, holes):
     work = Image.new('RGB', (pw, ph), ring_color(original, (0, 0, W, H), 0))
     work.paste(original.resize((w, h)), (0, 0))
     mask = Image.new('RGBA', (pw, ph), (0, 0, 0, 255))  # transparent = area to repaint
+    flat_mask = Image.new('L',(pw,ph),0)
+    flat_draw = ImageDraw.Draw(flat_mask)
     draw, mdraw = ImageDraw.Draw(work), ImageDraw.Draw(mask)
     for x0, y0, x1, y1 in holes:
         box = (max(0, int(x0 * s) - PAD), max(0, int(y0 * s) - PAD), min(pw, int(x1 * s) + PAD), min(ph, int(y1 * s) + PAD))
         # Pre-fill holes so text and brand-logo pixels never reach the image model.
-        draw.rectangle(box, fill=ring_color(work, box))
+        patch = work.crop(box)
+        colors = patch.resize((64,64)).getcolors(4096) or []
+        count, dominant = max(colors,default=(0,(255,255,255)))
+        # Text on a flat card/button needs its original surface, not the photographic scene
+        # behind that card. Preserve this deterministic fill when inpainting changes the surface.
+        uniform = count >= 4096*.45
+        draw.rectangle(box, fill=dominant if uniform else ring_color(work, box))
+        if uniform: flat_draw.rectangle(box,fill=255)
         mdraw.rectangle(box, fill=(0, 0, 0, 0))
     edited, ok = work, True
     with tempfile.TemporaryDirectory() as tmp:
@@ -84,6 +93,7 @@ def clean_plate(original, holes):
             edited = Image.open(io.BytesIO(data)).convert('RGB').resize((pw, ph))
         except Exception:
             ok = False
+    edited.paste(work,mask=flat_mask)
     holes_l = mask.getchannel('A').point(lambda a: 255 - a).crop((0, 0, w, h)).resize((W, H)).filter(ImageFilter.GaussianBlur(3))
     plate = original.copy()
     plate.paste(edited.crop((0, 0, w, h)).resize((W, H)), mask=holes_l)
@@ -205,7 +215,7 @@ def text_geometry(texts, kit, W):
         text = e['text'].strip()
         lines = text.split('\n')
         size = round(min(font.maxSize, max(font.minSize, statistics.median(by_role[e['role']]) * 0.9)))
-        w = max((x1 - x0) * 1.08, max(map(len, lines)) * size * 0.56)
+        w = (x1-x0) if e.get('localOcr') else max((x1 - x0) * 1.08, max(map(len, lines)) * size * 0.56)
         x0, x1 = {'left':(x0, x0 + w), 'right':(x1 - w, x1), 'center':((x0 + x1 - w) / 2, (x0 + x1 + w) / 2)}[e['align']]
         role = e['role'] if e['role'] in ('headline', 'subhead', 'body', 'cta') else 'body'
         layers.append(box_layer(role, max(0, x0), y0, min(W, x1), max(y1, y0 + len(lines) * size * 1.15)) | {
@@ -296,7 +306,7 @@ def run_decompose(job_id, ws, sample):
             shapes.append((e, (x0, y0, x1, y1), crop))
     texts = refine_text_boxes(texts, original)
     text_layers = text_geometry(texts, kit, W)
-    holes += [(l['x'], l['y'], l['x'] + l['w'], l['y'] + l['h']) for l in text_layers]
+    holes += [box for _,box,_ in texts]  # erase source glyphs, not the potentially wider replacement textbox
     c.update_job(job_id, progress='Cleaning background')
     plate, ok = clean_plate(original, holes)
     plate_asset = c.save_png(ws, plate, f'clean plate {sample.caption}', {'sampleAssetId':sample.id})

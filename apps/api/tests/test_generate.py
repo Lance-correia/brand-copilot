@@ -166,3 +166,15 @@ def test_bold_button_uses_body_font_instead_of_headline_minimum():
     body=SimpleNamespace(token='body',family='DM Sans',weight=400)
     kit=SimpleNamespace(colors=[object()],fonts=[head,body])
     assert nearest_font(kit,{'serif':False,'weight':700},'cta') is body
+
+
+def test_clean_plate_preserves_flat_panel_under_text(monkeypatch):
+    import io
+    from app.decompose import pipeline
+    original=Image.new('RGB',(400,200),'white')
+    ImageDraw.Draw(original).rectangle((65,60,200,72),fill='#000044')
+    bad=io.BytesIO(); Image.new('RGB',(400,208),'red').save(bad,'PNG')
+    monkeypatch.setattr(pipeline.images,'edit',lambda *a,**k:bad.getvalue())
+    plate,ok=pipeline.clean_plate(original,[(40,45,300,90)])
+    assert ok and plate.getpixel((100,65))==(255,255,255)
+    assert plate.getpixel((10,10))==original.getpixel((10,10))
