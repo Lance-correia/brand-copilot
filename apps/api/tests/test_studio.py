@@ -140,3 +140,47 @@ def test_failed_model_turn_persists_explanatory_pair(studio,monkeypatch):
     messages=client.get('/api/threads/'+thread['id']).json()['messages']
     assert messages[-2]['text']=='Edit B' and messages[-1]['text']==job['reply']
     assert thread['id'] not in agent.ACTIVE
+
+
+def test_split_with_fontless_kit_uses_local_fallback(studio,monkeypatch):
+    from app.decompose import pipeline
+    ws,client,thread,design=studio
+    kit=db.get('BrandKit',ws)
+    kit['fonts']=[]
+    for a in storage.list_assets(ws,'font'): db.delete('Asset',a.id)
+    db.put('BrandKit',ws,ws,kit)
+    monkeypatch.setenv('USE_STUBS','0')
+    monkeypatch.setattr(pipeline,'read_elements',lambda path:[{
+        'type':'text','text':'An editable headline','box':[.1,.1,.9,.3],'colorHex':'#1B1B1F',
+        'fontStyle':{'serif':False,'weight':700,'italic':False},'align':'left','role':'headline'}])
+    monkeypatch.setattr(pipeline,'clean_plate',lambda original,holes:(original.copy(),True))
+    s=agent.Session(c.new_job(),thread,'split',[],[])
+    sample=storage.list_assets(ws,'sample')[0]
+    result=s.execute('split_into_layers',{'assetId':sample.id})['design']
+    assert any(l['type']=='text' and l['text']=='An editable headline' for l in result['layers'])
+    fonts=storage.list_assets(ws,'font')
+    assert len(fonts)==1 and fonts[0].meta['fallback'] is True
+    assert all(f.assetId==fonts[0].id for f in storage.get_brand_kit(ws).fonts)
+    validate_contract('Design',result)
+
+
+def test_failed_split_stops_turn_instead_of_repeating_model_calls(studio,monkeypatch):
+    ws,client,thread,design=studio
+    monkeypatch.setenv('USE_STUBS','0')
+    sample=storage.list_assets(ws,'sample')[0]
+    calls={'chat':0,'split':0}
+    def choose_split(*a,**k):
+        calls['chat']+=1
+        return tool_message('split_into_layers',{'assetId':sample.id})
+    def fail(*a,**k):
+        calls['split']+=1
+        raise ValueError('min() iterable argument is empty')
+    monkeypatch.setattr(agent.deepseek,'chat',choose_split)
+    monkeypatch.setattr(agent.pipeline,'run_decompose',fail)
+    r=client.post(f'/api/threads/{thread["id"]}/messages',json={'text':'Split this image','attachmentAssetIds':[sample.id]})
+    job=client.get('/api/jobs/'+r.json()['jobId']).json()
+    assert job['status']=='error'
+    assert calls=={'chat':1,'split':1}
+    assert 'without uploading it again' in job['reply']
+    assert 'min()' not in job['reply']
+    assert thread['id'] not in agent.ACTIVE

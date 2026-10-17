@@ -94,6 +94,8 @@ def save_kit(ws: str, kit: BrandKit):
     workspace = db.get('Workspace', ws)
     if kit.workspaceId != ws:
         raise HTTPException(422, 'Workspace id mismatch')
+    from app.brand.fonts import ensure_fonts
+    kit = ensure_fonts(kit)
     db.put('BrandKit', ws, ws, validate_contract('BrandKit', kit))
     workspace['brandKitConfirmed'] = kit.confirmed
     db.put('Workspace', ws, ws, workspace)

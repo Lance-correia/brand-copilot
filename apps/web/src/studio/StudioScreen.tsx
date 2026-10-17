@@ -222,6 +222,7 @@ export default function StudioScreen() {
         <div ref={chatEnd} />
       </div>
       <div className="studio-compose-area">
+        {kit?.rules.some(r => r.id === "FONT-FALLBACK") && <p className="studio-font-notice">Using DM Sans as a temporary font. <Link to={`/w/${ws}/brand`}>Set your brand font</Link></p>}
         {error && <p className="studio-error" role="alert">{error}</p>}
         {focused.length > 0 && <div className="studio-focus-chips"><span>In focus</span>{focused.map(id => <button key={id} aria-label={`Remove focus ${designs[id]?.label}`} onClick={() => setFocused(ids => ids.filter(i => i !== id))}>{designs[id]?.label} <small>v{designs[id]?.version ?? 1}</small> ×</button>)}</div>}
         <form className={`studio-composer${over ? ' drag-over' : ''}`} onSubmit={send} onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop} onPaste={paste}>

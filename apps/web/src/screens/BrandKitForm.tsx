@@ -40,6 +40,7 @@ export default function BrandKitForm({ kit, onChange, assets }: { kit: BrandKit;
 
     <fieldset>
       <legend>Fonts</legend>
+      {kit.rules.some(r => r.id === "FONT-FALLBACK") && <p role="status">DM Sans is a temporary fallback because this pack has no font files. You can replace it with your brand font.</p>}
       {kit.fonts.map((f, i) => <div className="kit-row wrap" key={i}>
         <Field label="Token"><input value={f.token} onChange={e => patch('fonts', i, { token: e.target.value })} /></Field>
         <Field label="Family"><input value={f.family} onChange={e => patch('fonts', i, { family: e.target.value })} /></Field>

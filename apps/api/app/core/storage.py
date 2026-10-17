@@ -92,4 +92,13 @@ def list_assets(ws_id, kind=None) -> list[Asset]:
     return [Asset.model_validate(a) for a in db.list_records('Asset', ws_id) if not kind or a['kind'] == kind]
 
 def get_brand_kit(ws_id) -> BrandKit:
-    return BrandKit.model_validate(db.get('BrandKit', ws_id))
+    kit = BrandKit.model_validate(db.get('BrandKit', ws_id))
+    if kit.fonts:
+        return kit
+    from app.brand.fonts import FONT_LOCK, ensure_fonts
+    with FONT_LOCK:
+        kit = BrandKit.model_validate(db.get('BrandKit', ws_id))
+        ready = ensure_fonts(kit)
+        if ready != kit:
+            db.put('BrandKit', ws_id, ws_id, validate_contract('BrandKit', ready))
+        return ready

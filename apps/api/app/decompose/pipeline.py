@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageStat
 from app.core import db, storage
 from app.llm import deepseek, images
 from app.generate import common as c
+from app.brand.fonts import require_design_kit
 
 ROLES = ['background', 'hero', 'headline', 'subhead', 'body', 'cta', 'cta_bg', 'logo', 'decoration']
 PAD = 8  # working-image pixels around each hole
@@ -204,6 +205,7 @@ def iou(a, b):
     return ix / (area(a) + area(b) - ix or 1)
 
 def nearest_font(kit, style):
+    require_design_kit(kit)
     is_serif = lambda f: 'serif' in f.family.lower() and 'sans' not in f.family.lower()
     return min(kit.fonts, key=lambda f: (is_serif(f) != style['serif']) * 1000 + abs(f.weight - style['weight']))
 
@@ -217,6 +219,7 @@ def safe_color(kit, hex_, crop):
 
 def run_decompose(job_id, ws, sample):
     kit = storage.get_brand_kit(ws)
+    require_design_kit(kit)
     path = storage.asset_path(sample.id)
     original = flat(path)
     W, H = original.size

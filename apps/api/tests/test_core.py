@@ -222,3 +222,34 @@ def test_extract_from_page_images_batches_flash_calls(monkeypatch):
     assert {l['assetId']: (l['variant'], l['minWidth'], l['clearSpace']) for l in kit['logos']} == {
         ids['logo-dark.svg']: ('dark', 140, 1), ids['logo-light.svg']: ('light', 140, 1)}
     assert (kit['safeMarginPct'], kit['voice'], kit['imageryStyle']) == (8, 'Warm and clear', 'Natural light')
+
+def test_fontless_brand_pack_extracts_with_explicit_fallback(monkeypatch):
+    ws = bare_workspace(monkeypatch)
+    upload(ws, 'brand/logo-dark.svg', 'logo')
+    upload(ws, 'brand/images/coffee-01.png', 'image')
+    kit = client.post(f'/api/workspaces/{ws}/brand-kit/extract').json()
+    assert {f['token'] for f in kit['fonts']} == {'headline','body'}
+    assert all(f['family']=='DM Sans' for f in kit['fonts'])
+    fonts = client.get(f'/api/workspaces/{ws}/assets?kind=font').json()
+    assert len(fonts)==1 and fonts[0]['meta']['fallback'] is True
+    assert fonts[0]['meta']['providedBy']=='app'
+    assert any(r['id']=='FONT-FALLBACK' for r in kit['rules'])
+    # Re-extracting never hides the substitution or creates duplicate fallback files.
+    again = client.post(f'/api/workspaces/{ws}/brand-kit/extract').json()
+    assert any(r['id']=='FONT-FALLBACK' for r in again['rules'])
+    assert len(client.get(f'/api/workspaces/{ws}/assets?kind=font').json())==1
+    validate_contract('BrandKit',again)
+
+
+def test_legacy_empty_fonts_are_repaired_without_losing_confirmation(monkeypatch):
+    from app.core import db
+    ws = bare_workspace(monkeypatch)
+    upload(ws,'brand/logo-dark.svg','logo')
+    kit = client.post(f'/api/workspaces/{ws}/brand-kit/extract').json()
+    kit.update(fonts=[],confirmed=True)
+    db.put('BrandKit',ws,ws,kit)
+    first = client.get(f'/api/workspaces/{ws}/brand-kit').json()
+    second = client.get(f'/api/workspaces/{ws}/brand-kit').json()
+    assert first==second and first['confirmed'] is True
+    assert first['colors']==kit['colors'] and first['logos']==kit['logos']
+    assert len(first['fonts'])==2

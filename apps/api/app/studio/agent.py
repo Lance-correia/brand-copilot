@@ -1,5 +1,6 @@
 """Bounded Flash tool loop with persistent conversations and versioned scene-graph edits."""
 import json
+import logging
 import re
 import threading
 from copy import deepcopy
@@ -9,6 +10,7 @@ from app.core import db, storage
 from app.core.config import use_stubs
 from app.core.validation import validate_contract
 from app.brand.lint import lint_design
+from app.brand.fonts import BrandSetupError, FALLBACK_NOTICE, require_design_kit
 from app.decompose import pipeline
 from app.generate import common as c, variants, chat as edits
 from app.llm import deepseek
@@ -17,6 +19,10 @@ from .tools import TOOLS, SYSTEM
 ACTIVE = set()
 THREAD_LOCK = threading.Lock()
 MAX_STEPS = 15
+log = logging.getLogger(__name__)
+
+class SplitFailedError(ValueError):
+    """Stop the turn when a split fails instead of asking Flash to repeat it."""
 
 def now():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -41,11 +47,13 @@ class Session:
     def __init__(self, job_id, thread, text, attachments, focus):
         self.job_id, self.thread, self.ws = job_id, thread, thread['workspaceId']
         self.kit = storage.get_brand_kit(self.ws)
+        require_design_kit(self.kit)
         self.text, self.attachments, self.focus = text, attachments, focus
         self.aliases, self.outputs, self.sources, self.changes = {}, {}, {}, {}
         self.allowed = set(focus)
         self.reply_text = ''
         self.calls = 0
+        self.split_failures = {}
         for msg in thread['messages'][-20:]:
             self.allowed.update(msg['designIds'])
 
@@ -115,14 +123,22 @@ class Session:
             raise ValueError('Only uploaded samples can be split')
         if asset_id in self.sources:
             return self.design(self.sources[asset_id])
+        if asset_id in self.split_failures:
+            raise SplitFailedError(self.split_failures[asset_id])
         self.step('Reading the reference and splitting it into editable layers')
         if use_stubs():
             from app.core.fixtures import variant_designs
             source = variant_designs(self.ws, 1)[0]
             db.put('Design',source['id'],self.ws,source)
         else:
-            pipeline.run_decompose(self.job_id, self.ws, asset)
-            source = c.JOBS[self.job_id]['designs'][-1]
+            try:
+                pipeline.run_decompose(self.job_id, self.ws, asset)
+                source = c.JOBS[self.job_id]['designs'][-1]
+            except Exception as exc:
+                log.exception('Split failed for sample %s in workspace %s',asset_id,self.ws)
+                detail = str(exc) if isinstance(exc,BrandSetupError) else 'The layer splitter could not finish. Your uploaded image is saved; retry this request without uploading it again.'
+                self.split_failures[asset_id] = detail
+                raise SplitFailedError(detail) from exc
         self.sources[asset_id] = source['id']
         self.allowed.add(source['id'])
         with c.LOCK:
@@ -219,6 +235,8 @@ class Session:
 
     def loop(self):
         self.step('Reviewing your brand, conversation and current designs')
+        if any(r.id == 'FONT-FALLBACK' for r in self.kit.rules):
+            self.step(FALLBACK_NOTICE)
         request_text = self.text
         if self.attachments and not self.text.strip():
             # A product default, independent of whether the model elects to call the tools.
@@ -252,6 +270,8 @@ class Session:
                     if self.calls > MAX_STEPS: raise ValueError('Tool limit reached; summarize completed changes')
                     args = json.loads(call.function.arguments or '{}')
                     result = self.execute(call.function.name,args)
+                except (SplitFailedError,BrandSetupError):
+                    raise
                 except Exception as exc:
                     # Tool failures are recoverable; source guards apply before any model image call.
                     result = {'error':str(exc) if isinstance(exc,(ValueError,PermissionError,KeyError)) else type(exc).__name__}
@@ -274,7 +294,8 @@ def run_message(job_id, thread_id, text, attachments, focus):
         session = Session(job_id,thread,text,attachments,focus)
         session.loop()
     except Exception as exc:
-        error = f'Studio could not finish: {type(exc).__name__}'
+        log.exception('Studio job %s failed',job_id)
+        error = str(exc) if isinstance(exc,(SplitFailedError,BrandSetupError)) else f'Studio could not finish: {type(exc).__name__}'
         if session: session.step(error)
     finally:
         try:

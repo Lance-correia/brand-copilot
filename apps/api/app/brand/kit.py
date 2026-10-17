@@ -229,4 +229,5 @@ def extract_brand_kit(ws_id) -> BrandKit:
            'safeMarginPct': min(num(draft.get('safeMarginPct') or None, 6), 50),  # 0 means not stated
            'imageryStyle': str(draft.get('imageryStyle') or ''), 'voice': str(draft.get('voice') or ''),
            'rules': rules, 'confirmed': False}
-    return BrandKit.model_validate(validate_contract('BrandKit', kit))
+    from .fonts import ensure_fonts
+    return ensure_fonts(BrandKit.model_validate(validate_contract('BrandKit', kit)))

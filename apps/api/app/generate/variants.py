@@ -168,6 +168,8 @@ def generate_image(ws, kit, layer, prompt):
 
 def run_variants(job_id, ws, sample, brief, source_design=None, studio=False):
     kit = storage.get_brand_kit(ws)
+    from app.brand.fonts import require_design_kit
+    require_design_kit(kit)
     c.update_job(job_id, progress='Reading sample')
     spec = sample_spec(sample) if sample else {
         'aspect':f"{source_design['width']}:{source_design['height']}",
