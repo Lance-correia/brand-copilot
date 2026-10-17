@@ -58,7 +58,7 @@ def plan(kit, catalogue, spec, templates, brief, source_design=None):
                     'voice':kit.voice, 'imageryStyle':kit.imageryStyle},
         'assets':catalogue, 'designSpec':spec, 'brief':brief or '', 'sourceDesign':source_design,
         'templates':[{'id':t['id'], 'name':t['name'], 'aspect':t['aspect'],
-                      'slots':[f"{s['role']}:{s['kind']}" for s in t['slots']]} for t in templates]}
+                      'slots':[{'role':s['role'],'kind':s['kind'],'box':s['box']} for s in t['slots']]} for t in templates]}
     prompt = (
         'You are the art director for this brand. Plan exactly 4 on-brand design variants inspired by the sample design spec '
         'and the brief. Preserve the source design message and key layout ideas when sourceDesign is provided.\n'
@@ -70,7 +70,8 @@ def plan(kit, catalogue, spec, templates, brief, source_design=None):
         'Use brand images in at most 2 variants; the others get fresh imagePrompts. Never ask for text in images.\n'
         '- Vary the aspect: include at least one non-square template when one exists.\n'
         '- colors are palette tokens: background for the canvas and panels, accent for buttons, text for copy. '
-        'text must contrast strongly with background.\n\n'
+        'text must contrast strongly with background. Avoid placing faces or products behind copy panels.\n'
+        '- Preserve the source headline unless the brief asks to rewrite it. Give each option a distinct, clear art direction.\n\n'
         + json.dumps(context))
     result = deepseek.chat_json(deepseek.pro(), prompt, plan_schema([t['id'] for t in templates], tokens))
     plans = result['plans'][:4]
@@ -92,7 +93,7 @@ def base(role, x, y, w, h):
 def text_layer(role, text, x, y, w, h, kit, color, align='left'):
     font = c.font_for(kit, role)
     return base(role, x, y, w, h) | {'type':'text', 'text':text, 'fontToken':font.token,
-            'fontSize':c.fit_font_size(text, w, h, font), 'colorToken':color, 'align':align}
+            'fontSize':c.fit_font_size(text, w, h, font), 'fontWeight':font.weight, 'lineHeight':1.2, 'colorToken':color, 'align':align}
 
 def build(t, p, kit, ws, name):
     """Deterministic design from template + plan. Image slots without a pick come back in `pending`."""
@@ -224,6 +225,8 @@ def run_variants(job_id, ws, sample, brief, source_design=None, studio=False):
                     layer.update(type='shape', shape='rect', fillToken=p['colors']['accent'], radius=0)
             c.update_job(job_id, progress=f'Checking brand ({design["name"][:9]})')
             design, _ = c.lint_fix(finish(design, kit, p['colors']['text']), kit)
+            if source_design and source_design.get('provenance'):design['provenance']=dict(source_design['provenance'])
+            elif sample:design['provenance']={'referenceAssetId':sample.id}
             if studio: design.update(label=f'Option {chr(65+option_index)}',version=1)
             c.add_design(job_id, ws, design)
     c.update_job(job_id, progress='Done' + (f' ({failed[0]} image(s) failed, placeholders used)' if failed[0] else ''))

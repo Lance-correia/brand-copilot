@@ -69,7 +69,8 @@ class Session:
         return owned_design(self.ws, self.aliases.get(design_id, design_id))
 
     def publish(self, design):
-        design = validate_contract('Design', design)
+        from app.core.quality import assess
+        design = validate_contract('Design', assess(design,self.kit))
         db.put('Design', design['id'], self.ws, design)
         self.allowed.add(design['id'])
         self.outputs[design.get('label') or design['id']] = design

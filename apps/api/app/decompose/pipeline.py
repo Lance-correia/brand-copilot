@@ -173,24 +173,34 @@ def refine_text_boxes(texts, image):
     return refined
 
 def text_geometry(texts, kit, W):
-    """Text layers from (element, pixel box, crop). Sizes are shared per role (lines of one headline match),
-    and boxes widen to the text's estimated width in the brand font so words do not reflow."""
-    raw = [(y1 - y0) / (e['text'].strip().count('\n') + 1) for e, (x0, y0, x1, y1), _ in texts]
-    by_role = {}
-    for (e, _, _), r in zip(texts, raw):
-        by_role.setdefault(e['role'], []).append(r)
-    layers = []
-    for e, (x0, y0, x1, y1), crop in texts:
-        font = nearest_font(kit, e['fontStyle'], e['role'])
-        text = e['text'].strip()
-        lines = text.split('\n')
-        size = round(min(font.maxSize, max(font.minSize, statistics.median(by_role[e['role']]) * 0.9)))
-        w = (x1-x0) if e.get('localOcr') else max((x1 - x0) * 1.08, max(map(len, lines)) * size * 0.56)
-        x0, x1 = {'left':(x0, x0 + w), 'right':(x1 - w, x1), 'center':((x0 + x1 - w) / 2, (x0 + x1 + w) / 2)}[e['align']]
-        role = e['role'] if e['role'] in ('headline', 'subhead', 'body', 'cta') else 'body'
-        layers.append(box_layer(role, max(0, x0), y0, min(W, x1), max(y1, y0 + len(lines) * size * 1.15)) | {
-            'type':'text', 'text':text, 'fontToken':font.token, 'fontSize':size,
-            'colorToken':safe_color(kit, e['colorHex'], crop), 'align':e['align']})
+    """Keep OCR positions and measure replacement copy with the real brand font."""
+    from app.core.typography import fit_size
+    layers=[]
+    for e,(x0,y0,x1,y1),crop in texts:
+        role=e['role'] if e['role'] in ('headline','subhead','body','cta') else 'body'
+        font=nearest_font(kit,e['fontStyle'],role)
+        text=e['text'].strip()
+        width=min(W-x0,max(1,x1-x0))
+        # OCR detects ink height, not a full text line. Give the baseline/descenders room.
+        height=max(y1-y0,(y1-y0)*1.45)
+        preferred=min(font.maxSize,max(font.minSize,(y1-y0)/max(1,text.count('\n')+1)*1.25))
+        size=fit_size(text,width,height,font,max_size=preferred)
+        # Tiny source copy can be below a brand's minimum; widen its box while keeping it
+        # in the original panel, rather than silently wrapping it or rendering another size.
+        from app.core.typography import font_path,metrics
+        path=font_path(font.assetId)
+        if path:
+            measured,height_needed=metrics(text,path,size,width,weight=font.weight)
+            if height_needed>height or measured>width:
+                from app.core.typography import measured_font
+                actual=measured_font(path,size,font.weight)
+                desired=max(actual.getlength(line) for line in text.split('\n'))+2
+                width=min(W-x0,max(width,desired))
+                _,height_needed=metrics(text,path,size,width,weight=font.weight)
+                height=max(height,height_needed)
+        layers.append(box_layer(role,max(0,x0),y0,min(W,x0+width),y0+height)|{
+            'type':'text','text':text,'fontToken':font.token,'fontSize':size,'fontWeight':font.weight,
+            'lineHeight':1.2,'colorToken':safe_color(kit,e['colorHex'],crop),'align':e['align']})
     return layers
 
 def holds_any(kept, b):

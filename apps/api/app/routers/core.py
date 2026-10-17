@@ -135,5 +135,11 @@ def save_design(id: str, design: Design):
     previous = db.get('Design', id)
     if id != design.id or previous['workspaceId'] != design.workspaceId:
         raise HTTPException(422, 'Design identity mismatch')
-    db.put('Design', id, design.workspaceId, validate_contract('Design', design))
-    return design
+    from app.core.quality import assess
+    checked=design.model_dump(mode='json',exclude_unset=True)
+    try: kit=storage.get_brand_kit(design.workspaceId)
+    except KeyError: kit=None  # Designs can be saved before a brand kit has been extracted.
+    if kit: checked=assess(checked,kit)
+    checked=validate_contract('Design',checked)
+    db.put('Design',id,design.workspaceId,checked)
+    return checked

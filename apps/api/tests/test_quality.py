@@ -72,3 +72,26 @@ def test_source_analysis_is_cached_without_repeating_vision(monkeypatch):
     second=analysis.analyze(sample,path,reader)
     assert len(calls)==1 and not first[2]['analysisCacheHit'] and second[2]['analysisCacheHit']
     assert second[0]==first[0]
+
+def test_typography_uses_actual_glyph_width_and_lint_line_height():
+    from app.core import storage
+    from app.core.typography import fit_size,font_path,metrics
+    font=storage.get_brand_kit('ws_lumen').fonts[0]
+    narrow=fit_size('IIIIIIII',300,160,font)
+    wide=fit_size('WWWWWWWW',300,160,font)
+    assert narrow>wide
+    width,height=metrics('WWWWWWWW',font_path(font.assetId),wide,300,weight=font.weight)
+    assert width<=300 and height<=160
+
+def test_quality_flags_text_collisions_and_recomputes_after_fix():
+    from copy import deepcopy
+    from app.core import storage,db
+    from app.core.quality import assess
+    design=deepcopy(db.list_records('Design','ws_lumen')[0])
+    text=next(l for l in design['layers'] if l['type']=='text')
+    second={**text,'id':'lay_duplicate'};design['layers'].append(second)
+    checked=assess(design,storage.get_brand_kit('ws_lumen'))
+    assert any(f['code']=='TEXT_COLLISION' for f in checked['quality']['findings'])
+    checked['layers'].pop()
+    checked=assess(checked,storage.get_brand_kit('ws_lumen'))
+    assert not any(f['code']=='TEXT_COLLISION' for f in checked['quality']['findings'])

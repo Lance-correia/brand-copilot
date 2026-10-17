@@ -58,36 +58,11 @@ def image_luminance(layer, region):
     crop = (left, top, max(math.ceil((x1 - ox) / scale), left + 1), max(math.ceil((y1 - oy) / scale), top + 1))
     return ImageStat.Stat(luma.crop(crop)).mean[0] / 255
 
-@lru_cache(maxsize=512)
-def _font(path, size):
-    return ImageFont.truetype(path, size)
+from app.core.typography import measured_font as _font, font_path as font_file, wrap, metrics
 
-def font_file(asset_id):
-    try:
-        path = storage.asset_path(asset_id)
-    except KeyError:
-        return None
-    return str(path) if path.is_file() else None
-
-def wrap(text, font, width):
-    lines = []
-    for paragraph in text.split('\n'):
-        line = ''
-        for word in paragraph.split(' '):
-            candidate = f'{line} {word}' if line else word
-            if line and font.getlength(candidate) > width:
-                lines.append(line)
-                line = word
-            else:
-                line = candidate
-        lines.append(line)
-    return lines
-
-def text_fits(layer, path, size):
-    font = _font(path, size)
-    lines = wrap(layer.text, font, layer.w)
-    height = len(lines) * size * (layer.lineHeight or LINE_HEIGHT)
-    return height <= layer.h + 1 and all(font.getlength(line) <= layer.w + 1 for line in lines)
+def text_fits(layer, path, size, weight=None):
+    width,height=metrics(layer.text,path,size,layer.w,layer.lineHeight or LINE_HEIGHT,weight or layer.fontWeight or 400)
+    return width<=layer.w+1 and height<=layer.h+1
 
 def box(layer):
     return layer.x, layer.y, layer.x + layer.w, layer.y + layer.h
@@ -198,8 +173,8 @@ def lint_design(design, kit) -> list[LintViolation]:
                         fix = update(layer, colorToken=token) if token != layer.colorToken and best > current else []
                     flag('contrast', layer.id, f'Contrast {current:.2f}:1 {"over the image " if over_image else ""}is below {need:g}:1', fix)
             path = font and font_file(font.assetId)
-            if path and layer.text.strip() and not text_fits(layer, path, layer.fontSize):
-                size = next((s for s in range(math.ceil(layer.fontSize) - 1, math.ceil(font.minSize) - 1, -1) if text_fits(layer, path, s)), None)
+            if path and layer.text.strip() and not text_fits(layer, path, layer.fontSize, font.weight):
+                size = next((s for s in range(math.ceil(layer.fontSize) - 1, math.ceil(font.minSize) - 1, -1) if text_fits(layer, path, s, font.weight)), None)
                 flag('text_overflow', layer.id, 'Text does not fit its box', update(layer, fontSize=size) if size else [])
         if layer.role not in UNBOUNDED and (layer.x < mx or layer.y < my or layer.x + layer.w > W - mx or layer.y + layer.h > H - my):
             props = {}

@@ -231,7 +231,7 @@ undo(): void
 redo(): void
 • src/use/index.ts (Prompt 2) exports renderThumbnail(design: Design, kit: BrandKit, maxSize?: number): Promise<string>, returning a PNG data URL.
 • src/copilot/index.ts (Prompt 1) exports StartModal, VariantsGrid, CopilotPanel and LintPanel. None take required props; they read the workspace id from the route and state from useCanvasStore.
-• src/lib/fonts.ts (Prompt 2) exports loadBrandFonts(kit: BrandKit): Promise<void>, registering each font as a FontFace whose family name is its token (for example headline).
+• src/lib/fonts.ts exports loadBrandFonts(kit: BrandKit): Promise<void> and fontFamily(font: FontToken): string. Scene graphs retain font tokens; rendering resolves them to asset/weight-specific FontFace families so switching brands cannot replace another brand's typeface.
 Hard rules
 • Brand-asset pixels never go to an image model. /images/edit returns 403 for any asset whose source is brand_asset, and the UI shows "Edit with AI" only on generated layers.
 • Direct layer edits (text, style, move, swap from the library) make no model calls. Calling /lint is fine; it is deterministic.

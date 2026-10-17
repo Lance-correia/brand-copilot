@@ -1,6 +1,6 @@
 import { Rect, StaticCanvas, Textbox, type FabricObject } from 'fabric';
 import type { BrandKit, Design, ImageLayer, Layer, TextLayer } from '../types';
-import { loadBrandFonts } from '../lib/fonts';
+import { loadBrandFonts, fontFamily } from '../lib/fonts';
 
 /** Fabric object -> layer id, for both the editor and offscreen renders. */
 export const layerIds = new WeakMap<FabricObject, string>();
@@ -66,7 +66,7 @@ export async function createLayerObject(layer: Layer, kit: BrandKit): Promise<Fa
   let obj: FabricObject;
   if (layer.type === 'text') {
     const font = kit.fonts.find(f => f.token === layer.fontToken);
-    const box = new BoxText(layer.text, { ...base, fontFamily: layer.fontToken, fontSize: layer.fontSize,
+    const box = new BoxText(layer.text, { ...base, fontFamily: font ? fontFamily(font) : layer.fontToken, fontSize: layer.fontSize,
       fontWeight: layer.fontWeight ?? font?.weight ?? 400, fill: colorHex(kit, layer.colorToken), textAlign: layer.align,
       lineHeight: layer.lineHeight ?? DEFAULT_LINE_HEIGHT });
     box.boxHeight = layer.h;

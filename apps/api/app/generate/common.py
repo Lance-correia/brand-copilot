@@ -24,7 +24,8 @@ def update_job(job_id, **fields):
         JOBS[job_id].update(fields)
 
 def add_design(job_id, ws, design):
-    design = validate_contract('Design', design)
+    from app.core.quality import assess
+    design = validate_contract('Design', assess(design,storage.get_brand_kit(ws)))
     db.put('Design', design['id'], ws, design)
     with LOCK:
         JOBS[job_id]['designs'].append(design)
@@ -109,20 +110,10 @@ def font_for(kit: BrandKit, role):
         return tokens.get('headline') or kit.fonts[0]
     return tokens.get('body') or kit.fonts[-1]
 
-def fit_font_size(text, w, h, font, line_height=1.15, char_width=0.55):
-    """Largest size in the font token's range whose wrapped text fits w x h (estimate: char width = 0.55em)."""
-    words = text.split() or ['']
-    for size in range(int(font.maxSize), int(font.minSize) - 1, -2):
-        per_line = max(1, int(w / (size * char_width)))
-        lines, current = 1, 0
-        for word in words:
-            if current and current + 1 + len(word) > per_line:
-                lines, current = lines + 1, len(word)
-            else:
-                current += len(word) + (1 if current else 0)
-        if lines * size * line_height <= h and max(map(len, words)) <= per_line:
-            return size
-    return font.minSize
+def fit_font_size(text, w, h, font, line_height=1.2, char_width=0.55):
+    """Largest size measured in the actual font. char_width retained for call compatibility."""
+    from app.core.typography import fit_size
+    return fit_size(text,w,h,font,line_height)
 
 # Ops
 
