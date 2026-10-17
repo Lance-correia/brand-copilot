@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brand-copilot.local/schema/Thread.schema.json",
+  "title": "Thread",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^thr_[A-Za-z0-9_-]+$"
+    },
+    "workspaceId": {
+      "type": "string",
+      "pattern": "^ws_[A-Za-z0-9_-]+$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "Message.schema.json"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "workspaceId",
+    "title",
+    "createdAt",
+    "messages"
+  ],
+  "additionalProperties": false
+}

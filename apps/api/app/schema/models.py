@@ -117,6 +117,9 @@ class Design(ContractModel):
     height: Annotated[int, Field(ge=1)]
     background: Background
     layers: list[Layer]
+    label: Annotated[str, Field(max_length=80)] | None = None
+    version: Annotated[int, Field(ge=1)] | None = None
+    parentId: Annotated[str, Field(pattern='^des_[A-Za-z0-9_-]+$')] | None = None
 
 class DesignSpecRegionsItem(ContractModel):
     role: Literal['background', 'hero', 'headline', 'subhead', 'body', 'cta', 'cta_bg', 'logo', 'decoration']
@@ -193,6 +196,8 @@ class Job(ContractModel):
     progress: str
     designs: list[Design]
     error: str | None
+    reply: str | None = None
+    steps: list[str] | None = None
 
 class LintViolation(ContractModel):
     ruleId: str
@@ -200,6 +205,15 @@ class LintViolation(ContractModel):
     layerId: str | None
     message: str
     fix: list[EditOp]
+
+class Message(ContractModel):
+    id: Annotated[str, Field(pattern='^msg_[A-Za-z0-9_-]+$')]
+    role: Literal['user', 'assistant']
+    text: str
+    attachmentAssetIds: list[Annotated[str, Field(pattern='^ast_[A-Za-z0-9_-]+$')]]
+    designIds: list[Annotated[str, Field(pattern='^des_[A-Za-z0-9_-]+$')]]
+    steps: list[str]
+    createdAt: str
 
 class TemplateSlotsItem(ContractModel):
     role: Literal['background', 'hero', 'headline', 'subhead', 'body', 'cta', 'cta_bg', 'logo', 'decoration']
@@ -213,6 +227,13 @@ class Template(ContractModel):
     width: Annotated[int, Field(ge=1)]
     height: Annotated[int, Field(ge=1)]
     slots: list[TemplateSlotsItem]
+
+class Thread(ContractModel):
+    id: Annotated[str, Field(pattern='^thr_[A-Za-z0-9_-]+$')]
+    workspaceId: Annotated[str, Field(pattern='^ws_[A-Za-z0-9_-]+$')]
+    title: str
+    createdAt: str
+    messages: list[Message]
 
 class Workspace(ContractModel):
     id: Annotated[str, Field(pattern='^ws_[A-Za-z0-9_-]+$')]

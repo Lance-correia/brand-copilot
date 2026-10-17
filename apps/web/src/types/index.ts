@@ -120,6 +120,9 @@ export interface Design {
   height: number;
   background: Background;
   layers: Array<Layer>;
+  label?: string;
+  version?: number;
+  parentId?: string;
 }
 
 export interface DesignSpecRegionsItem {
@@ -207,6 +210,8 @@ export interface Job {
   progress: string;
   designs: Array<Design>;
   error: string | null;
+  reply?: string;
+  steps?: Array<string>;
 }
 
 export interface LintViolation {
@@ -215,6 +220,16 @@ export interface LintViolation {
   layerId: string | null;
   message: string;
   fix: Array<EditOp>;
+}
+
+export interface Message {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  attachmentAssetIds: Array<string>;
+  designIds: Array<string>;
+  steps: Array<string>;
+  createdAt: string;
 }
 
 export interface TemplateSlotsItem {
@@ -230,6 +245,14 @@ export interface Template {
   width: number;
   height: number;
   slots: Array<TemplateSlotsItem>;
+}
+
+export interface Thread {
+  id: string;
+  workspaceId: string;
+  title: string;
+  createdAt: string;
+  messages: Array<Message>;
 }
 
 export interface Workspace {

@@ -302,6 +302,18 @@ export const schemas = [
         "items": {
           "$ref": "Layer.schema.json"
         }
+      },
+      "label": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "parentId": {
+        "type": "string",
+        "pattern": "^des_[A-Za-z0-9_-]+$"
       }
     },
     "required": [
@@ -718,6 +730,15 @@ export const schemas = [
           "string",
           "null"
         ]
+      },
+      "reply": {
+        "type": "string"
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       }
     },
     "required": [
@@ -1049,6 +1070,62 @@ export const schemas = [
   },
   {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://brand-copilot.local/schema/Message.schema.json",
+    "title": "Message",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^msg_[A-Za-z0-9_-]+$"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "user",
+          "assistant"
+        ]
+      },
+      "text": {
+        "type": "string"
+      },
+      "attachmentAssetIds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^ast_[A-Za-z0-9_-]+$"
+        }
+      },
+      "designIds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^des_[A-Za-z0-9_-]+$"
+        }
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "role",
+      "text",
+      "attachmentAssetIds",
+      "designIds",
+      "steps",
+      "createdAt"
+    ],
+    "additionalProperties": false
+  },
+  {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://brand-copilot.local/schema/Template.schema.json",
     "title": "Template",
     "type": "object",
@@ -1124,6 +1201,43 @@ export const schemas = [
       "width",
       "height",
       "slots"
+    ],
+    "additionalProperties": false
+  },
+  {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://brand-copilot.local/schema/Thread.schema.json",
+    "title": "Thread",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^thr_[A-Za-z0-9_-]+$"
+      },
+      "workspaceId": {
+        "type": "string",
+        "pattern": "^ws_[A-Za-z0-9_-]+$"
+      },
+      "title": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message.schema.json"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "workspaceId",
+      "title",
+      "createdAt",
+      "messages"
     ],
     "additionalProperties": false
   },

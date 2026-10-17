@@ -31,6 +31,15 @@
         "string",
         "null"
       ]
+    },
+    "reply": {
+      "type": "string"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

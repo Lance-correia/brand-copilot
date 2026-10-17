@@ -1,5 +1,5 @@
 Contracts
-Every agent builds against these shapes. Only the Phase 0 owner (you) changes them; agents ask instead of editing.
+Every agent builds against these shapes. The Studio owner on main may update contracts and regenerate types.
 Repo layout
 apps/web/                  Vite + React + TypeScript + Fabric.js + zustand
   src/app/                 routing, page shell                        (Prompt 1)
@@ -37,7 +37,7 @@ IMAGE_MODEL_EDIT=gpt-image-2.5-sunburst
 DATA_DIR=./data
 USE_STUBS=1                # 1 = AI steps return fixtures, no keys needed
 Conventions
-• IDs are prefixed strings: ws_, ast_, des_, lay_, job_.
+• IDs are prefixed strings: ws_, ast_, des_, lay_, job_, thr_, msg_.
 • Coordinates are canvas pixels, origin top-left. Layer order is array order; the first layer is at the bottom.
 • Colors and fonts are referenced by brand-kit token, never by raw hex or family name, so a brand-kit change updates every design.
 • Templates and specs use boxes as [x0, y0, x1, y1] fractions of the canvas.
@@ -237,3 +237,17 @@ Hard rules
 • Direct layer edits (text, style, move, swap from the library) make no model calls. Calling /lint is fine; it is deterministic.
 • Generated images never contain text: every image prompt ends with "No text, letters, logos or watermarks."
 • Every design and op is validated against the schema before it is saved or applied.
+
+Studio contracts (Prompt 6)
+• Thread: {id, workspaceId, title, createdAt, messages: Message[]}. IDs use thr_.
+• Message: {id, role: user | assistant, text, attachmentAssetIds: string[], designIds: string[], steps: string[], createdAt}. IDs use msg_. Timestamps are UTC ISO 8601.
+• Design adds optional label (e.g. "Option B"), version (integer >=1), parentId (a Design id). Agent edits create one new version per edited option per turn, even if several tools edit it. Direct preview edits PUT that same design id without a model call. Parent versions remain available.
+• Job adds optional reply (string) and steps (string[]). GET /jobs/{id} exposes the growing step list, progress, designs, and final reply. Polling is the streaming transport.
+• POST /workspaces/{ws}/threads {title?} -> Thread (201)
+• GET /workspaces/{ws}/threads -> Thread[]
+• GET /threads/{id} -> Thread
+• POST /threads/{id}/messages {text, attachmentAssetIds?: string[], focusDesignIds?: string[]} -> {jobId} (202)
+Attachments first use POST /workspaces/{ws}/samples. Attachment ids must identify uploaded sample images in the same workspace. Focus ids must belong to the same workspace. One message job runs per thread; concurrent submissions return 409.
+On completion, persist both user and assistant messages together. The assistant carries reply, result designIds, and steps. On failure, persist an explanatory assistant reply and any successful results; return an error job. Completed threads survive API and browser restarts. Active jobs are in memory and may be lost on API restart.
+Studio's loop uses Flash vision/tools, at most 15 model turns and 15 tool executions per message. A bare attachment splits into editable layers and generates four labeled options using the shared pipeline and variant planner/builder. Tool operations and resulting designs are schema-validated; lint fixes run at most twice after each edit. Asset ownership and actual stored source are checked before replacement or image editing. Brand-asset pixels never go to the image model.
+Frontend: /w/:id/studio replaces Use; /w/:id/use redirects there, retaining query parameters. /w/:id/editor opens the existing canvas editor without the old modal/variant flow. Studio persists the thread id in the URL and pending job/focus ids locally. Recent design JSON is re-read from storage for each turn so direct edits are current.

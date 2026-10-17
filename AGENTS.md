@@ -1,6 +1,6 @@
 # Brand Copilot
 
-A local, single-user AI brand-design copilot. Welcome creates or opens a workspace. Brand identity accepts guidelines, logos, fonts and approved images, and confirms an extracted brand kit. Use is a layered canvas with four on-brand variants, direct layer editing, and a brand library. Only generated images may be edited with AI.
+A local, single-user AI brand-design copilot. Welcome creates or opens a workspace. Brand identity accepts guidelines, logos, fonts and approved images, and confirms an extracted brand kit. Studio is a persistent chat with four editable options, version history, a canvas preview and a brand library. Only generated images may be edited with AI.
 
 ## Run
 
@@ -35,8 +35,8 @@ Validation: `npm run typecheck`; `bash scripts/smoke_stub.sh`; `python scripts/s
 
 ## Rules
 
-- Never edit `packages/schema`, `src/types`, `app/schema`, or another agent's folder. The Phase 0 scaffold is the sole initial writer. Generated files and the typed API client are read-only after handoff.
-- Ask the human for contract changes. Read `packages/schema/CONTRACTS.md` before implementation.
+- The Studio owner on main owns the whole repository. Edit JSON schemas first and regenerate `src/types` and `app/schema` with `scripts/gen_types.sh`; never hand-edit generated files.
+- Read and update `packages/schema/CONTRACTS.md` when changing Studio contracts.
 - Commit often on your own branch. Use a separate checkout/worktree when multiple agents run simultaneously.
 - Brand-asset pixels never go to an image model. Image-edit routes return 403 for brand assets; only generated layers show Edit with AI.
 - Direct text/style/move/library edits make no model calls. Lint is deterministic.

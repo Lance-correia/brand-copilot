@@ -31,6 +31,18 @@
       "items": {
         "$ref": "Layer.schema.json"
       }
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "parentId": {
+      "type": "string",
+      "pattern": "^des_[A-Za-z0-9_-]+$"
     }
   },
   "required": [
