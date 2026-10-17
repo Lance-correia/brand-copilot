@@ -1,6 +1,8 @@
 # Output quality review
 
-Branch: `review/output-quality`, based on `main` at `cbc13f7` (this repository has no `master`). Changes are not merged or pushed.
+Branch: `review/output-quality`, based on `main` at `cbc13f7` (this repository has no `master`). The user accepted the branch and it was fast-forward merged into `main` at `ab35290`. Nothing was pushed.
+
+The historical preview addresses below are stopped. The current single local app is **http://127.0.0.1:8000**, started with `npm start`. Original and review data were consolidated in `data/`, preserving newer original conversations and all review assets/designs. Both databases were backed up under `data/backups/` before consolidation.
 
 ## Review checkpoints
 
@@ -10,15 +12,15 @@ Branch: `review/output-quality`, based on `main` at `cbc13f7` (this repository h
 4. Studio: live option cards, Original / Clean background / Final comparison, actionable quality details and clear editing/export controls.
 5. Validation and presentation: representative image benchmark, real-provider/browser checks, before/after examples and measured timings.
 
-Each checkpoint is committed separately. Review with `git log main..review/output-quality --oneline` and `git diff main...review/output-quality`. Returning to `main` restores the accepted code baseline; runtime designs are separate from Git.
+Each checkpoint is committed separately. The original review diff is `git diff cbc13f7..ab35290`; the accepted code now lives on `main`. Runtime designs are separate from Git.
 
-Implemented checkpoints 1–5. Final verification: 64 backend tests passed, two optional live checks skipped; production build and TypeScript passed; the complete real-model Playwright demo passed. Final OCR-availability/save guards were then checked with backend tests and a real saved-reference/browser comparison check. No merge or push was performed.
+Implemented checkpoints 1–5. Review verification: 64 backend tests passed, two optional live checks skipped; production build and TypeScript passed; the complete real-model Playwright demo passed. Final OCR-availability/save guards were then checked with backend tests and a real saved-reference/browser comparison check. The branch was subsequently accepted and merged; nothing was pushed.
 
 The acceptance standard is a visibly clean background, editable text that fits, an intact library logo, and a useful final export. Tests support that standard; they do not establish photographic perfection. Review findings remain visible when automated checks cannot establish a clean result.
 
 ## Browser preview
 
-Open `http://127.0.0.1:5174/`. The review API is on `127.0.0.1:8002`, with `DATA_DIR=./data/output-quality-preview` and real models enabled. Its database and files were copied from the current brand once; changes made in the preview do not update the original database. No public hosting or push is involved.
+The historical review used ports 5174/8002 and an independent copy of the data. Those processes are stopped. Open **http://127.0.0.1:8000** for the accepted app, which serves the UI and API together with the consolidated data. No public hosting or push is involved.
 
 Attach a reference and choose **Clean & make editable** to preserve its composition, or **Create four options** to explore art directions. Focus a card and switch **Original / Clean background / Final design**. The clean-background tab shows the cleaned reference, including when the focused card is a newly composed option. It can be downloaded separately. The final tab and PNG export use editable canvas layers.
 
@@ -84,6 +86,8 @@ Run `.venv/bin/python scripts/benchmark_quality.py --real` for six reproducible 
 4. Generate four directions, then ask for a headline/color change and a library photo swap. Show the new version and its preserved parent.
 5. Export the final PNG and the separate clean background. Show quality findings honestly, including fallback fonts or low-resolution inputs.
 
-## Accept or reject
+## Acceptance and local consolidation
 
-Inspect each checkpoint with `git log main..review/output-quality --oneline` and `git show <commit>`. The accepted baseline remains `main` at `cbc13f7`. No changes have been merged. A normal fast-forward merge can accept the complete branch after review; selected commits can instead be reviewed individually. Switching back to `main` restores the code baseline. Stop/restart preview processes when changing branches; Git does not roll back runtime databases.
+The user accepted the six review commits and they were fast-forward merged into `main`. The separate worktree web server, original web/API, review web/API and conflicting Docker preview were stopped. `npm start` now builds and runs one local process on port 8000. Database backups are under `data/backups/unify-20261017T111246Z/`. Consolidation retained all assets and designs, the longest matching chat histories, and the corrected fallback headline role: 3 workspaces, 189 assets, 68 designs and 8 threads. Every record validated and all asset files were present.
+
+Single-app checks: **66 tests passed, 2 skipped**, production build/TypeScript passed. Headless Chromium verified the existing XERO conversation, Original/Clean/Final, deep-route reload and PNG export using only port 8000. Unknown API routes remain JSON 404s and missing build assets do not return the SPA. The old app ports 5173, 5174 and 8002 no longer have listeners.

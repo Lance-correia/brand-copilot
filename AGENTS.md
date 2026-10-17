@@ -15,9 +15,9 @@ cp .env.example .env
 python scripts/seed.py
 ```
 
-API: `cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`
+Local app: `npm start`, then open **http://127.0.0.1:8000**. This builds the UI and serves it with the API in one process and on one port. Stop with Ctrl+C. `npm start -- --skip-build` reuses the current build.
 
-Web: `npm run dev` from the root, then open `http://127.0.0.1:5173` (/api proxies to port 8000).
+For development only: API `cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`; web `npm run dev` from the root (port 5173, proxying `/api` to 8000). Stop the single-app instance before starting development servers.
 
 Validation: `npm run typecheck`; `bash scripts/smoke_stub.sh`; `python scripts/smoke_models.py` (real credentials required, ignores USE_STUBS); `npm run test:e2e` (Studio acceptance, real models).
 

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +7,7 @@ from fastapi.responses import JSONResponse
 from jsonschema import ValidationError as SchemaValidationError
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.core.config import use_stubs
+from app.core.config import use_stubs, ROOT
 from app.core.fixtures import seed_workspace
 from app.routers import core, generate, studio
 
@@ -39,3 +40,7 @@ async def invalid(request: Request, exc):
 @app.exception_handler(Exception)
 async def unexpected(request: Request, exc: Exception):
     return JSONResponse({'error':'Internal server error'}, status_code=500)
+
+if os.getenv('SERVE_WEB')=='1':
+    from app.web import mount_web
+    mount_web(app,ROOT/'apps/web/dist')

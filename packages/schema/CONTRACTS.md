@@ -22,6 +22,7 @@ packages/schema/           JSON Schemas + CONTRACTS.md                (Prompt 0,
 fixtures/                  sample brand, samples, designs, templates  (Prompt 0)
 data/                      runtime SQLite + files (gitignored)
 Run and environment
+• Single local app: npm start builds and serves the UI and /api together at http://127.0.0.1:8000. SERVE_WEB=1 mounts the built SPA after the API routers; unknown /api paths and missing static assets retain 404 responses. React routes reload correctly. No additional web port is needed.
 • API: cd apps/api && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 • Web: npm run dev (http://127.0.0.1:5173; Vite proxies /api to 127.0.0.1:8000)
 • Storage: SQLite at data/app.db; files at data/files/{workspaceId}/{assetId}.{ext}
@@ -254,7 +255,7 @@ Frontend: /w/:id/studio replaces Use; /w/:id/use redirects there, retaining quer
 
 Fontless packs: extraction and legacy kit reads resolve uploaded font files first; if none exist, install the bundled OFL DM Sans as an explicitly marked temporary fallback (asset meta.fallback=true, manual FONT-FALLBACK rule). The kit keeps its confirmation state and palette/logos. Studio and Brand identity disclose the substitution; it is never described as an extracted brand font. Missing palette preconditions and failed splitting stop the turn with an actionable error; a failed split is not repeatedly sent to models in the same turn.
 
-Output-quality review branch
+Output quality (accepted into main)
 • Design adds optional provenance: {referenceAssetId, cleanPlateAssetId?}. Both assets belong to that design's workspace. Versions retain provenance; original and cleaned previews are comparison-only and never modify the design or trigger models.
 • Design adds optional quality: {status: ready | needs_review, checkedAt, checks: string[], findings: {code, severity: error | warning, message, layerId?}[]}. This is a report of completed checks, not a guarantee of visual perfection. Recompute it on backend design saves and Studio publication; direct text edits still make no model calls.
 • Decomposition stores reusable source analysis and cleanup records in sample/plate Asset.meta, including a versioned content fingerprint, processing times, cleanup method, residual-text findings and whether OCR was available. Cache keys include the analysis/cleanup revision and source bytes. Failed cleanup results are not reused as clean output. Native OCR is optional and its absence is disclosed in quality findings.
