@@ -1,16 +1,23 @@
 from uuid import uuid4
 from datetime import datetime, timezone
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response
+import logging
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from app.schema import Workspace, Asset, BrandKit, Design, LintViolation
 from app.core import db, storage
+from app.core.captions import caption_asset
 from app.core.config import use_stubs
 from app.core.fixtures import seed_workspace
 from app.core.validation import validate_contract
+from app.brand.kit import extract_brand_kit
 from app.brand.lint import lint_design
 
 router = APIRouter(prefix='/api')
+log = logging.getLogger(__name__)
+KINDS = {'logo', 'font', 'image', 'icon', 'guideline', 'sample'}
+FILE_HEADERS = {'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff',
+                'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox"}
 
 class CreateWorkspace(BaseModel):
     name: str = Field(min_length=1)
@@ -33,14 +40,21 @@ def get_workspace(ws: str):
     return db.get('Workspace', ws)
 
 @router.post('/workspaces/{ws}/assets', response_model=Asset, status_code=201)
-def upload_asset(ws: str, file: UploadFile = File(...), kind: str = Form(...)):
-    if kind not in {'logo','font','image','icon','guideline','sample'}:
-        raise HTTPException(422, 'Invalid asset kind')
-    return storage.save_asset(ws, file.file.read(), file.filename, kind, 'upload' if kind == 'sample' else 'brand_asset')
+def upload_asset(ws: str, background: BackgroundTasks, file: UploadFile = File(...), kind: str = Form(...)):
+    if kind not in KINDS:
+        raise HTTPException(422, f'Invalid asset kind {kind!r}; expected one of {", ".join(sorted(KINDS))}')
+    try:
+        asset = storage.save_asset(ws, file.file.read(), file.filename, kind, 'upload' if kind == 'sample' else 'brand_asset')
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    background.add_task(caption_asset, asset.id)
+    return asset
 
 @router.get('/workspaces/{ws}/assets', response_model=list[Asset])
 def list_assets(ws: str, kind: str | None = None):
     db.get('Workspace', ws)
+    if kind and kind not in KINDS:
+        raise HTTPException(422, f'Invalid asset kind {kind!r}')
     return storage.list_assets(ws, kind)
 
 @router.delete('/assets/{id}', status_code=204)
@@ -56,14 +70,16 @@ def get_file(assetId: str):
     path = storage.asset_path(assetId)
     if not path.is_file():
         raise HTTPException(404, 'Asset file not found')
-    return FileResponse(path, media_type=asset.mime)
+    return FileResponse(path, media_type=asset.mime, headers=FILE_HEADERS)
 
 @router.post('/workspaces/{ws}/brand-kit/extract', response_model=BrandKit)
 def extract_kit(ws: str):
     db.get('Workspace', ws)
-    if not use_stubs():
-        raise HTTPException(501, 'Brand extraction belongs to Prompt 3')
-    kit = storage.get_brand_kit(ws).model_copy(update={'confirmed': False})
+    try:
+        kit = extract_brand_kit(ws)
+    except Exception as exc:
+        log.exception('Brand extraction failed for %s', ws)
+        raise HTTPException(502, f'Brand extraction failed: {type(exc).__name__}')
     return save_kit(ws, kit)
 
 @router.get('/workspaces/{ws}/brand-kit', response_model=BrandKit)
@@ -97,6 +113,11 @@ def create_design(ws: str, design: Design):
     db.get('Workspace', ws)
     if design.workspaceId != ws:
         raise HTTPException(422, 'Workspace id mismatch')
+    try:
+        if db.get('Design', design.id)['workspaceId'] != ws:
+            raise HTTPException(409, 'Design id belongs to another workspace')
+    except KeyError:
+        pass
     db.put('Design', design.id, ws, validate_contract('Design', design))
     return design
 
