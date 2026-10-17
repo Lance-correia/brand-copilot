@@ -1,5 +1,7 @@
 """Image to layers: read elements (Flash), clean the background plate (edit model), assemble an editable design."""
 import difflib
+import re
+import statistics
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -30,7 +32,8 @@ def read_elements(path):
         'put any wordmark letters in text), shape (solid buttons, panels, badges) or photo. '
         'box: [x0, y0, x1, y1] as fractions of the image width and height, tight around the element. '
         'colorHex: the text or fill color as #RRGGBB. fontStyle describes text; use serif=false, weight=400 otherwise. '
-        'role: headline, subhead, body, cta (button label), cta_bg (button shape), logo, hero, decoration or background.'),
+        'role: headline, subhead, body, cta (button label), cta_bg (button shape), logo, hero, decoration or background. '
+        'List each button twice: its shape (role cta_bg) and its label text (role cta).'),
         element_schema(), images=[str(path)])
     elements = []
     for e in result['elements']:
@@ -131,6 +134,75 @@ def corner_radius(crop, fill):
     d = next((i for i in range(n) if close(crop.getpixel((i, i)))), 0)
     return min(round(d / 0.2929), n)
 
+def box_layer(role, x0, y0, x1, y1):
+    return {'id':c.layer_id(), 'role':role, 'x':round(x0), 'y':round(y0), 'w':max(1, round(x1 - x0)),
+            'h':max(1, round(y1 - y0)), 'rotation':0, 'visible':True, 'locked':False}
+
+def solid(crop, fill, share=0.6):
+    """True when most of the crop is close to the fill color (a button or panel, not an illustration)."""
+    px = list(crop.convert('RGB').resize((24, 24)).getdata())
+    return sum(sum(abs(a - b) for a, b in zip(p, fill)) < 60 for p in px) >= share * len(px)
+
+def text_geometry(texts, kit, W):
+    """Text layers from (element, pixel box, crop). Sizes are shared per role (lines of one headline match),
+    and boxes widen to the text's estimated width in the brand font so words do not reflow."""
+    raw = [(y1 - y0) / (e['text'].strip().count('\n') + 1) for e, (x0, y0, x1, y1), _ in texts]
+    by_role = {}
+    for (e, _, _), r in zip(texts, raw):
+        by_role.setdefault(e['role'], []).append(r)
+    layers = []
+    for e, (x0, y0, x1, y1), crop in texts:
+        font = nearest_font(kit, e['fontStyle'])
+        text = e['text'].strip()
+        lines = text.split('\n')
+        size = round(min(font.maxSize, max(font.minSize, statistics.median(by_role[e['role']]) * 0.9)))
+        w = max((x1 - x0) * 1.08, max(map(len, lines)) * size * 0.56)
+        x0, x1 = {'left':(x0, x0 + w), 'right':(x1 - w, x1), 'center':((x0 + x1 - w) / 2, (x0 + x1 + w) / 2)}[e['align']]
+        role = e['role'] if e['role'] in ('headline', 'subhead', 'body', 'cta') else 'body'
+        layers.append(box_layer(role, max(0, x0), y0, min(W, x1), max(y1, y0 + len(lines) * size * 1.15)) | {
+            'type':'text', 'text':text, 'fontToken':font.token, 'fontSize':size,
+            'colorToken':safe_color(kit, e['colorHex'], crop), 'align':e['align']})
+    return layers
+
+def holds_any(kept, b):
+    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+    return any(k[1][0] <= cx <= k[1][2] and k[1][1] <= cy <= k[1][3] for k in kept)
+
+def find_button(image, box, margin=6, tolerance=40):
+    """Solid button behind a text box: from just outside the text, walk outward along the center row and
+    column while the color stays the same. None when the text sits on no distinct solid fill."""
+    x0, y0, x1, y1 = (int(v) for v in box)
+    cy, cx = (y0 + y1) // 2, (x0 + x1) // 2
+    if x0 - margin < 0 or y0 - margin < 0:
+        return None
+    fill = image.getpixel((x0 - margin, cy))
+    same = lambda x, y: 0 <= x < image.width and 0 <= y < image.height and sum(abs(a - b) for a, b in zip(image.getpixel((x, y)), fill)) < tolerance
+    if not (same(x1 + margin, cy) and same(cx, y0 - margin) and same(cx, y1 + margin)):
+        return None
+    left, right, top, bottom = x0 - margin, x1 + margin, y0 - margin, y1 + margin
+    while same(left - 1, cy): left -= 1
+    while same(right + 1, cy): right += 1
+    while same(cx, top - 1): top -= 1
+    while same(cx, bottom + 1): bottom += 1
+    if (right - left) * (bottom - top) > 0.2 * image.width * image.height:
+        return None  # the text sits on a big plane, not a button
+    return left, top, right + 1, bottom + 1
+
+def logo_box(logo, box, W):
+    """Widen a wordmark-only box to the logo's full aspect so the symbol is covered too."""
+    asset = storage.get_asset(logo.assetId)
+    x0, y0, x1, y1 = box
+    aspect = (asset.width or 1) / (asset.height or 1)
+    h = (y1 - y0) * 1.2
+    w = max(x1 - x0, h * aspect)
+    # ponytail: assumes the symbol sits left of the wordmark (as in most lockups); anchor right.
+    return max(0, x1 - w), max(0, y0 - (y1 - y0) * 0.1), x1, y0 - (y1 - y0) * 0.1 + h
+
+def iou(a, b):
+    ix = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    area = lambda r: (r[2] - r[0]) * (r[3] - r[1])
+    return ix / (area(a) + area(b) - ix or 1)
+
 def nearest_font(kit, style):
     is_serif = lambda f: 'serif' in f.family.lower() and 'sans' not in f.family.lower()
     return min(kit.fonts, key=lambda f: (is_serif(f) != style['serif']) * 1000 + abs(f.weight - style['weight']))
@@ -156,43 +228,48 @@ def run_decompose(job_id, ws, sample):
     for e in elements:
         x0, y0, x1, y1 = px(e['box'])
         crop = original.crop((int(x0), int(y0), max(int(x1), int(x0) + 1), max(int(y1), int(y0) + 1)))
-        if e['type'] == 'text' and e['text'].strip():
+        # A short text that reads as the brand wordmark is the logo (Flash labels wordmarks either way).
+        logo = match_logo(kit, ws_name, e, crop) if e['type'] == 'logo' or len(e['text'].split()) <= 2 else None
+        if logo:
+            box = logo_box(logo, (x0, y0, x1, y1), W)
+            logos.append((box, logo))
+            holes.append(box)
+        elif e['type'] == 'text' and e['text'].strip():
             texts.append((e, (x0, y0, x1, y1), crop))
-            holes.append((x0, y0, x1, y1))
-        elif e['type'] == 'logo':
-            logo = match_logo(kit, ws_name, e, crop)
-            if logo:  # unmatched logos stay in the plate
-                logos.append(((x0, y0, x1, y1), logo))
-                holes.append((x0, y0, x1, y1))
         elif e['type'] == 'shape':
             shapes.append((e, (x0, y0, x1, y1), crop))
+    text_layers = text_geometry(texts, kit, W)
+    holes += [(l['x'], l['y'], l['x'] + l['w'], l['y'] + l['h']) for l in text_layers]
     c.update_job(job_id, progress='Cleaning background')
     plate, ok = clean_plate(original, holes)
     plate_asset = c.save_png(ws, plate, f'clean plate {sample.caption}', {'sampleAssetId':sample.id})
     c.update_job(job_id, progress='Assembling' + ('' if ok else ' (background edit failed, used flat fill)'))
-    base = lambda role, x0, y0, x1, y1: {'id':c.layer_id(), 'role':role, 'x':round(x0), 'y':round(y0),
-        'w':max(1, round(x1 - x0)), 'h':max(1, round(y1 - y0)), 'rotation':0, 'visible':True, 'locked':False}
-    layers = [base('background', 0, 0, W, H) | {'type':'image', 'source':'generated', 'assetId':plate_asset.id, 'fit':'cover'}]
-    cta_centers = [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for e, b, _ in texts if e['role'] == 'cta']
-    for e, (x0, y0, x1, y1), crop in shapes:
-        fill = c.rgb(e['colorHex']) if e['colorHex'].startswith('#') and len(e['colorHex']) in (4, 7) else crop.getpixel((crop.width // 2, crop.height // 2))
-        role = 'cta_bg' if any(x0 <= cx <= x1 and y0 <= cy <= y1 for cx, cy in cta_centers) else ('cta_bg' if e['role'] == 'cta_bg' else 'decoration')
-        layers.append(base(role, x0, y0, x1, y1) | {'type':'shape', 'shape':'rect',
-                      'fillToken':c.nearest_color(kit, fill), 'radius':corner_radius(crop, fill)})
+    layers = [box_layer('background', 0, 0, W, H) | {'type':'image', 'source':'generated', 'assetId':plate_asset.id, 'fit':'cover'}]
+    centers = [(l['role'], l['x'] + l['w'] / 2, l['y'] + l['h'] / 2) for l in text_layers]
+    holds = lambda b, role=None: any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] and role in (None, r) for r, cx, cy in centers)
+    kept = []
+    for e, b, crop in shapes:
+        fill = c.rgb(e['colorHex']) if re.fullmatch(r'#[0-9a-fA-F]{6}', e['colorHex']) else crop.getpixel((crop.width // 2, crop.height // 2))
+        # ponytail: only small solid panels/buttons that hold text become layers; big planes and illustration stay in the plate.
+        small = (b[2] - b[0]) * (b[3] - b[1]) < 0.2 * W * H
+        if small and solid(crop, fill) and (holds(b) or e['role'] == 'cta_bg') and not any(iou(b, k[1]) > 0.6 for k in kept):
+            kept.append((e, b, crop))
+            role = 'cta_bg' if holds(b, 'cta') or e['role'] == 'cta_bg' else 'decoration'
+            layers.append(box_layer(role, *b) | {'type':'shape', 'shape':'rect',
+                          'fillToken':c.nearest_color(kit, fill), 'radius':corner_radius(crop, fill)})
+    for l in text_layers:
+        b = (l['x'], l['y'], l['x'] + l['w'], l['y'] + l['h'])
+        if l['role'] == 'cta' and not holds_any(kept, b):
+            button = find_button(original, b)
+            if button:
+                fill = original.getpixel((int(button[0]) + 3, int((button[1] + button[3]) / 2)))
+                crop = original.crop(tuple(int(v) for v in button))
+                layers.append(box_layer('cta_bg', *button) | {'type':'shape', 'shape':'rect',
+                              'fillToken':c.nearest_color(kit, fill), 'radius':corner_radius(crop, fill)})
     for (x0, y0, x1, y1), logo in logos:
         logo = c.logo_for(kit, c.mean_rgb(storage.asset_path(plate_asset.id), [x0 / W, y0 / H, x1 / W, y1 / H])) or logo
-        layers.append(base('logo', x0, y0, x1, y1) | {'type':'image', 'source':'brand_asset', 'assetId':logo.assetId, 'fit':'contain'})
-    for e, (x0, y0, x1, y1), crop in texts:
-        font = nearest_font(kit, e['fontStyle'])
-        lines = e['text'].count('\n') + 1
-        size = min(font.maxSize, max(font.minSize, round((y1 - y0) / lines / 1.15)))
-        role = e['role'] if e['role'] in ('headline', 'subhead', 'body', 'cta') else 'body'
-        # Brand fonts differ from the source font: give a little extra width so words do not reflow.
-        grow = (x1 - x0) * 0.08
-        x0, x1 = {'left':(x0, x1 + grow), 'right':(x0 - grow, x1), 'center':(x0 - grow / 2, x1 + grow / 2)}[e['align']]
-        layers.append(base(role, max(0, x0), y0, min(W, x1), max(y1, y0 + lines * size * 1.15)) | {
-            'type':'text', 'text':e['text'].strip(), 'fontToken':font.token, 'fontSize':size,
-            'colorToken':safe_color(kit, e['colorHex'], crop), 'align':e['align']})
+        layers.append(box_layer('logo', x0, y0, x1, y1) | {'type':'image', 'source':'brand_asset', 'assetId':logo.assetId, 'fit':'contain'})
+    layers += text_layers
     design = {'id':'des_' + uuid4().hex, 'workspaceId':ws, 'name':f'Layers from {sample.filename}'[:80],
               'width':W, 'height':H, 'background':{'colorToken':c.nearest_color(kit, ImageStat.Stat(plate).mean)}, 'layers':layers}
     from app.brand.lint import lint_design
